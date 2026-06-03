@@ -17,6 +17,8 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { addCertification, createGuardian, uploadDocument, type AddCertificationPayload } from '@/services/api';
 
+const IBM = "'IBM Plex Sans', system-ui, sans-serif";
+
 const CERT_TYPES: { value: AddCertificationPayload['certificationType']; label: string }[] = [
   { value: 'FIRST_AID', label: 'First Aid' },
   { value: 'CROWD_CONTROL', label: 'Crowd Control' },
@@ -50,7 +52,7 @@ const EMPTY_CERT_ROW: CertRow = {
 
 function FieldLabel({ children, optional }: { children: React.ReactNode; optional?: boolean }) {
   return (
-    <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1.5">
+    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
       {children}
       {optional && <span className="ml-1 text-slate-400 normal-case font-normal tracking-normal">(optional)</span>}
     </p>
@@ -73,7 +75,7 @@ function SelectField({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       required={required}
-      className="w-full px-3 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-slate-900 transition-colors"
+      className="w-full px-3 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-slate-900 transition-colors"
     >
       {children}
     </select>
@@ -92,12 +94,12 @@ function FormSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden mb-3">
+    <div className="bg-white rounded border border-slate-200 overflow-hidden mb-3">
       <div className="flex items-center gap-2.5 px-4 py-3 border-b border-slate-100 bg-slate-50/60">
-        <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center shrink-0', iconBg)}>
+        <div className={cn('w-7 h-7 rounded flex items-center justify-center shrink-0', iconBg)}>
           {icon}
         </div>
-        <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+        <h3 className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{title}</h3>
       </div>
       <div className="p-4">{children}</div>
     </div>
@@ -127,22 +129,20 @@ function CertCard({
   }
 
   return (
-    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-      {/* Card header */}
+    <div className="bg-slate-50 border border-slate-200 rounded p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-slate-600">
+        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">
           Certification {index + 1}
         </span>
         <button
           type="button"
           onClick={onRemove}
-          className="flex items-center gap-1 px-2 py-1 text-[11px] text-red-500 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
+          className="flex items-center gap-1 px-2 py-1 text-[11px] text-red-500 hover:bg-red-50 rounded transition-colors cursor-pointer"
         >
           <Trash2 className="w-3 h-3" /> Remove
         </button>
       </div>
 
-      {/* Row 1: Type + Issuer */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <FieldLabel>Type</FieldLabel>
@@ -168,7 +168,6 @@ function CertCard({
         </div>
       </div>
 
-      {/* Row 2: Issue date + Expiry date */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <FieldLabel>Issue date</FieldLabel>
@@ -191,11 +190,10 @@ function CertCard({
         </div>
       </div>
 
-      {/* Row 3: Document upload */}
       <div>
         <FieldLabel optional>Certificate document (PDF / PNG / JPG)</FieldLabel>
         {row.file ? (
-          <div className="flex items-center gap-2.5 px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-xs">
+          <div className="flex items-center gap-2.5 px-3 py-2.5 bg-white border border-slate-200 rounded text-xs">
             <FileUp className="w-3.5 h-3.5 text-amber-500 shrink-0" />
             <span className="flex-1 truncate text-slate-700 font-medium">{row.file.name}</span>
             <span className="text-slate-400 shrink-0">{fmt(row.file.size)}</span>
@@ -211,7 +209,7 @@ function CertCard({
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="w-full flex items-center gap-2.5 px-3 py-2.5 bg-white border border-dashed border-slate-300 rounded-lg text-xs text-slate-500 cursor-pointer hover:border-green-400 hover:bg-green-50/30 transition-colors"
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 bg-white border border-dashed border-slate-300 rounded text-xs text-slate-500 cursor-pointer hover:border-green-400 hover:bg-green-50/30 transition-colors"
           >
             <FileUp className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             <span>Click to attach certificate file</span>
@@ -237,7 +235,6 @@ function CertCard({
 export function GuardianRegisterPage() {
   const navigate = useNavigate();
 
-  // Identity
   const [fullName,    setFullName]    = useState('');
   const [nationalId,  setNationalId]  = useState('');
   const [phone,       setPhone]       = useState('');
@@ -245,18 +242,15 @@ export function GuardianRegisterPage() {
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [gender,      setGender]      = useState('');
 
-  // Deployment
   const [districtBase,       setDistrictBase]       = useState('');
   const [sectorBase,         setSectorBase]         = useState('');
   const [coverageDistricts,  setCoverageDistricts]  = useState('');
   const [preferredShift,     setPreferredShift]     = useState('');
 
-  // Professional
   const [employmentType,  setEmploymentType]  = useState('');
   const [yearsExperience, setYearsExperience] = useState('');
   const [specializations, setSpecializations] = useState<string[]>([]);
 
-  // Vetting
   const [reserveForceNumber, setReserveForceNumber] = useState('');
   const [rnpReferenceNumber, setRnpReferenceNumber] = useState('');
   const [vettingNotes,       setVettingNotes]       = useState('');
@@ -289,7 +283,6 @@ export function GuardianRegisterPage() {
     );
   }
 
-  // Required field checklist (sidebar)
   const checks = [
     { label: 'Full name',       done: fullName.length > 0 },
     { label: 'National ID',     done: nationalId.length > 0 },
@@ -300,7 +293,7 @@ export function GuardianRegisterPage() {
     { label: 'Employment type', done: employmentType.length > 0 },
     { label: 'Specializations', done: specializations.length > 0 },
   ];
-  const doneCount  = checks.filter((c) => c.done).length;
+  const doneCount   = checks.filter((c) => c.done).length;
   const progressPct = Math.round((doneCount / checks.length) * 100);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -329,8 +322,7 @@ export function GuardianRegisterPage() {
 
       for (const row of certRows) {
         if (!row.cert.issuer || !row.cert.issueDate) continue;
-        let documentId: string | undefined;
-        if (row.file) documentId = await uploadDocument(row.file);
+        const documentId = row.file ? await uploadDocument(row.file) : undefined;
         await addCertification(created.id, {
           certificationType: row.cert.certificationType,
           issuer: row.cert.issuer,
@@ -349,245 +341,245 @@ export function GuardianRegisterPage() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col h-full bg-slate-50">
+    <form onSubmit={handleSubmit} className="flex flex-col h-full bg-slate-50" style={{ fontFamily: IBM }}>
 
       {/* ── Scrollable content ── */}
       <div className="flex-1 overflow-y-auto overscroll-contain">
-      <div className="flex gap-5 px-4 sm:px-5 pb-5 pt-5 items-start">
+        <div className="flex gap-5 px-4 sm:px-5 pb-5 pt-5 items-start">
 
-        {/* Left: form sections */}
-        <div className="flex-1 min-w-0 space-y-0">
-          {submitError && (
-            <div className="mb-3 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-              {submitError}
-            </div>
-          )}
-
-          {/* Identity */}
-          <FormSection icon={<User className="w-3.5 h-3.5 text-green-600" />} iconBg="bg-green-100" title="Identity">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-              <div>
-                <FieldLabel>Full name</FieldLabel>
-                <Input required value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Jean-Marie Uwimana" className="bg-slate-50" />
-              </div>
-              <div>
-                <FieldLabel>National ID (Indangamuntu)</FieldLabel>
-                <Input required value={nationalId} onChange={(e) => setNationalId(e.target.value)} placeholder="1 19XX X XXXXXXX X XX" className="bg-slate-50" />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-              <div>
-                <FieldLabel>Phone number</FieldLabel>
-                <Input required type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+250788123456" className="bg-slate-50" />
-                <p className="text-[10px] text-slate-400 mt-1">E.164 format — include country code</p>
-              </div>
-              <div>
-                <FieldLabel>Email address</FieldLabel>
-                <Input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" className="bg-slate-50" />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <FieldLabel optional>Date of birth</FieldLabel>
-                <Input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="bg-slate-50" />
-              </div>
-              <div>
-                <FieldLabel>Gender</FieldLabel>
-                <SelectField value={gender} onChange={setGender} required>
-                  <option value="">— Select gender —</option>
-                  <option value="MALE">Male</option>
-                  <option value="FEMALE">Female</option>
-                  <option value="OTHER">Other</option>
-                  <option value="PREFER_NOT_TO_SAY">Prefer not to say</option>
-                </SelectField>
-              </div>
-            </div>
-          </FormSection>
-
-          {/* Deployment */}
-          <FormSection icon={<MapPin className="w-3.5 h-3.5 text-blue-500" />} iconBg="bg-blue-100" title="Deployment">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-              <div>
-                <FieldLabel>District base</FieldLabel>
-                <Input required value={districtBase} onChange={(e) => setDistrictBase(e.target.value)} placeholder="Nyarugenge" className="bg-slate-50" />
-              </div>
-              <div>
-                <FieldLabel>Sector base</FieldLabel>
-                <Input value={sectorBase} onChange={(e) => setSectorBase(e.target.value)} placeholder="Kimisagara" className="bg-slate-50" />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <FieldLabel>Coverage districts</FieldLabel>
-                <Input value={coverageDistricts} onChange={(e) => setCoverageDistricts(e.target.value)} placeholder="Gasabo, Kicukiro" className="bg-slate-50" />
-                <p className="text-[10px] text-slate-400 mt-1">Comma-separated</p>
-              </div>
-              <div>
-                <FieldLabel>Preferred shift</FieldLabel>
-                <SelectField value={preferredShift} onChange={setPreferredShift}>
-                  <option value="">— Select shift —</option>
-                  <option value="DAY">Day</option>
-                  <option value="NIGHT">Night</option>
-                  <option value="BOTH">Both</option>
-                </SelectField>
-              </div>
-            </div>
-          </FormSection>
-
-          {/* Professional */}
-          <FormSection icon={<Briefcase className="w-3.5 h-3.5 text-purple-500" />} iconBg="bg-purple-100" title="Professional">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-              <div>
-                <FieldLabel>Employment type</FieldLabel>
-                <SelectField value={employmentType} onChange={setEmploymentType} required>
-                  <option value="">— Select type —</option>
-                  <option value="FULL_TIME">Full-time</option>
-                  <option value="PART_TIME">Part-time</option>
-                  <option value="RESERVE">Reserve</option>
-                </SelectField>
-              </div>
-              <div>
-                <FieldLabel optional>Years of experience</FieldLabel>
-                <Input type="number" min="0" value={yearsExperience} onChange={(e) => setYearsExperience(e.target.value)} placeholder="0" className="bg-slate-50" />
-              </div>
-            </div>
-            <div>
-              <FieldLabel>Specializations</FieldLabel>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
-                {SPECIALIZATIONS.map(({ value, label }) => (
-                  <label
-                    key={value}
-                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-slate-200 bg-slate-50 cursor-pointer hover:border-green-400 hover:bg-green-50/30 transition-colors"
-                  >
-                    <div className={cn(
-                      'w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-colors',
-                      specializations.includes(value) ? 'bg-green-500 border-green-500' : 'border-slate-300 bg-white',
-                    )}>
-                      {specializations.includes(value) && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />}
-                    </div>
-                    <input
-                      type="checkbox"
-                      className="sr-only"
-                      checked={specializations.includes(value)}
-                      onChange={() => toggleSpecialization(value)}
-                    />
-                    <span className="text-xs text-slate-700">{label}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          </FormSection>
-
-          {/* Vetting / RNP */}
-          <FormSection icon={<Shield className="w-3.5 h-3.5 text-orange-500" />} iconBg="bg-orange-100" title="Vetting / RNP">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-              <div>
-                <FieldLabel optional>Reserve force number</FieldLabel>
-                <Input value={reserveForceNumber} onChange={(e) => setReserveForceNumber(e.target.value)} placeholder="RF-XXXXX" className="bg-slate-50" />
-              </div>
-              <div>
-                <FieldLabel optional>RNP reference number</FieldLabel>
-                <Input value={rnpReferenceNumber} onChange={(e) => setRnpReferenceNumber(e.target.value)} placeholder="RNP-XXXXX" className="bg-slate-50" />
-              </div>
-            </div>
-            <div>
-              <FieldLabel optional>Vetting notes</FieldLabel>
-              <textarea
-                value={vettingNotes}
-                onChange={(e) => setVettingNotes(e.target.value)}
-                rows={3}
-                placeholder="Internal notes on background check…"
-                className="w-full px-3 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 resize-none transition-colors"
-              />
-            </div>
-          </FormSection>
-
-          {/* Certifications */}
-          <FormSection icon={<Award className="w-3.5 h-3.5 text-green-600" />} iconBg="bg-green-100" title="Certifications">
-            {certRows.length === 0 ? (
-              <p className="text-xs text-slate-400 mb-3">No certifications added yet. Click below to add one.</p>
-            ) : (
-              <div className="space-y-3 mb-3">
-                {certRows.map((row, i) => (
-                  <CertCard
-                    key={i}
-                    index={i}
-                    row={row}
-                    onUpdate={(patch) => updateCertField(i, patch)}
-                    onFileChange={(f) => updateCertFile(i, f)}
-                    onRemove={() => removeCertRow(i)}
-                  />
-                ))}
+          {/* Left: form sections */}
+          <div className="flex-1 min-w-0 space-y-0">
+            {submitError && (
+              <div className="mb-3 rounded bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                {submitError}
               </div>
             )}
-            <button
-              type="button"
-              onClick={addCertRow}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-green-700 border border-green-300 bg-green-50 rounded-lg hover:bg-green-100 transition-colors cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" /> Add certification
-            </button>
-          </FormSection>
-        </div>
 
-        {/* ── Right: progress sidebar — hidden on mobile ── */}
-        <div className="hidden lg:block w-64 shrink-0 self-start sticky top-4">
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/60">
-              <h3 className="text-xs font-semibold text-slate-900">Required fields</h3>
-            </div>
-            <div className="p-4">
-              <div className="space-y-1 mb-4">
-                {checks.map((item) => (
-                  <div key={item.label} className="flex items-center gap-2.5 py-1.5">
-                    <div className={cn(
-                      'w-5 h-5 rounded-md flex items-center justify-center shrink-0 transition-colors',
-                      item.done ? 'bg-green-500' : 'bg-slate-100 border border-slate-200',
-                    )}>
-                      {item.done && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
-                    </div>
-                    <span className={cn('text-xs', item.done ? 'text-slate-800 font-medium' : 'text-slate-400')}>
-                      {item.label}
-                    </span>
-                  </div>
-                ))}
+            {/* Identity */}
+            <FormSection icon={<User className="w-3.5 h-3.5 text-green-600" />} iconBg="bg-green-100" title="Identity">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                <div>
+                  <FieldLabel>Full name</FieldLabel>
+                  <Input required value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Jean-Marie Uwimana" className="bg-slate-50" />
+                </div>
+                <div>
+                  <FieldLabel>National ID (Indangamuntu)</FieldLabel>
+                  <Input required value={nationalId} onChange={(e) => setNationalId(e.target.value)} placeholder="1 19XX X XXXXXXX X XX" className="bg-slate-50" />
+                </div>
               </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                <div>
+                  <FieldLabel>Phone number</FieldLabel>
+                  <Input required type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+250788123456" className="bg-slate-50" />
+                  <p className="text-[10px] text-slate-400 mt-1">E.164 format — include country code</p>
+                </div>
+                <div>
+                  <FieldLabel>Email address</FieldLabel>
+                  <Input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" className="bg-slate-50" />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <FieldLabel optional>Date of birth</FieldLabel>
+                  <Input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="bg-slate-50" />
+                </div>
+                <div>
+                  <FieldLabel>Gender</FieldLabel>
+                  <SelectField value={gender} onChange={setGender} required>
+                    <option value="">— Select gender —</option>
+                    <option value="MALE">Male</option>
+                    <option value="FEMALE">Female</option>
+                    <option value="OTHER">Other</option>
+                    <option value="PREFER_NOT_TO_SAY">Prefer not to say</option>
+                  </SelectField>
+                </div>
+              </div>
+            </FormSection>
 
-              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-green-500 rounded-full transition-all duration-300"
-                  style={{ width: `${progressPct}%` }}
+            {/* Deployment */}
+            <FormSection icon={<MapPin className="w-3.5 h-3.5 text-blue-500" />} iconBg="bg-blue-100" title="Deployment">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                <div>
+                  <FieldLabel>District base</FieldLabel>
+                  <Input required value={districtBase} onChange={(e) => setDistrictBase(e.target.value)} placeholder="Nyarugenge" className="bg-slate-50" />
+                </div>
+                <div>
+                  <FieldLabel>Sector base</FieldLabel>
+                  <Input value={sectorBase} onChange={(e) => setSectorBase(e.target.value)} placeholder="Kimisagara" className="bg-slate-50" />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <FieldLabel>Coverage districts</FieldLabel>
+                  <Input value={coverageDistricts} onChange={(e) => setCoverageDistricts(e.target.value)} placeholder="Gasabo, Kicukiro" className="bg-slate-50" />
+                  <p className="text-[10px] text-slate-400 mt-1">Comma-separated</p>
+                </div>
+                <div>
+                  <FieldLabel>Preferred shift</FieldLabel>
+                  <SelectField value={preferredShift} onChange={setPreferredShift}>
+                    <option value="">— Select shift —</option>
+                    <option value="DAY">Day</option>
+                    <option value="NIGHT">Night</option>
+                    <option value="BOTH">Both</option>
+                  </SelectField>
+                </div>
+              </div>
+            </FormSection>
+
+            {/* Professional */}
+            <FormSection icon={<Briefcase className="w-3.5 h-3.5 text-purple-500" />} iconBg="bg-purple-100" title="Professional">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                <div>
+                  <FieldLabel>Employment type</FieldLabel>
+                  <SelectField value={employmentType} onChange={setEmploymentType} required>
+                    <option value="">— Select type —</option>
+                    <option value="FULL_TIME">Full-time</option>
+                    <option value="PART_TIME">Part-time</option>
+                    <option value="RESERVE">Reserve</option>
+                  </SelectField>
+                </div>
+                <div>
+                  <FieldLabel optional>Years of experience</FieldLabel>
+                  <Input type="number" min="0" value={yearsExperience} onChange={(e) => setYearsExperience(e.target.value)} placeholder="0" className="bg-slate-50" />
+                </div>
+              </div>
+              <div>
+                <FieldLabel>Specializations</FieldLabel>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+                  {SPECIALIZATIONS.map(({ value, label }) => (
+                    <label
+                      key={value}
+                      className="flex items-center gap-2.5 px-3 py-2.5 rounded border border-slate-200 bg-slate-50 cursor-pointer hover:border-green-400 hover:bg-green-50/30 transition-colors"
+                    >
+                      <div className={cn(
+                        'w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-colors',
+                        specializations.includes(value) ? 'bg-green-500 border-green-500' : 'border-slate-300 bg-white',
+                      )}>
+                        {specializations.includes(value) && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />}
+                      </div>
+                      <input
+                        type="checkbox"
+                        className="sr-only"
+                        checked={specializations.includes(value)}
+                        onChange={() => toggleSpecialization(value)}
+                      />
+                      <span className="text-xs text-slate-700">{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </FormSection>
+
+            {/* Vetting / RNP */}
+            <FormSection icon={<Shield className="w-3.5 h-3.5 text-orange-500" />} iconBg="bg-orange-100" title="Vetting / RNP">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                <div>
+                  <FieldLabel optional>Reserve force number</FieldLabel>
+                  <Input value={reserveForceNumber} onChange={(e) => setReserveForceNumber(e.target.value)} placeholder="RF-XXXXX" className="bg-slate-50" />
+                </div>
+                <div>
+                  <FieldLabel optional>RNP reference number</FieldLabel>
+                  <Input value={rnpReferenceNumber} onChange={(e) => setRnpReferenceNumber(e.target.value)} placeholder="RNP-XXXXX" className="bg-slate-50" />
+                </div>
+              </div>
+              <div>
+                <FieldLabel optional>Vetting notes</FieldLabel>
+                <textarea
+                  value={vettingNotes}
+                  onChange={(e) => setVettingNotes(e.target.value)}
+                  rows={3}
+                  placeholder="Internal notes on background check…"
+                  className="w-full px-3 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 resize-none transition-colors"
                 />
               </div>
-              <p className="text-[10px] text-slate-400 mt-1.5 text-center">
-                {doneCount} of {checks.length} required fields complete
-              </p>
+            </FormSection>
 
-              {doneCount === checks.length && (
-                <div className="mt-3 px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-center">
-                  <p className="text-xs font-semibold text-green-700">Ready to register</p>
+            {/* Certifications */}
+            <FormSection icon={<Award className="w-3.5 h-3.5 text-green-600" />} iconBg="bg-green-100" title="Certifications">
+              {certRows.length === 0 ? (
+                <p className="text-xs text-slate-400 mb-3">No certifications added yet. Click below to add one.</p>
+              ) : (
+                <div className="space-y-3 mb-3">
+                  {certRows.map((row, i) => (
+                    <CertCard
+                      key={i}
+                      index={i}
+                      row={row}
+                      onUpdate={(patch) => updateCertField(i, patch)}
+                      onFileChange={(f) => updateCertFile(i, f)}
+                      onRemove={() => removeCertRow(i)}
+                    />
+                  ))}
                 </div>
               )}
+              <button
+                type="button"
+                onClick={addCertRow}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-green-700 border border-green-300 bg-green-50 rounded hover:bg-green-100 transition-colors cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add certification
+              </button>
+            </FormSection>
+          </div>
+
+          {/* ── Right: progress sidebar — hidden on mobile ── */}
+          <div className="hidden lg:block w-64 shrink-0 self-start sticky top-4">
+            <div className="bg-white rounded border border-slate-200 overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/60">
+                <h3 className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Required fields</h3>
+              </div>
+              <div className="p-4">
+                <div className="space-y-1 mb-4">
+                  {checks.map((item) => (
+                    <div key={item.label} className="flex items-center gap-2.5 py-1.5">
+                      <div className={cn(
+                        'w-5 h-5 rounded flex items-center justify-center shrink-0 transition-colors',
+                        item.done ? 'bg-green-500' : 'bg-slate-100 border border-slate-200',
+                      )}>
+                        {item.done && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
+                      </div>
+                      <span className={cn('text-xs', item.done ? 'text-slate-800 font-medium' : 'text-slate-400')}>
+                        {item.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-green-500 rounded-full transition-all duration-300"
+                    style={{ width: `${progressPct}%` }}
+                  />
+                </div>
+                <p className="font-mono text-[10px] text-slate-400 mt-1.5 text-center">
+                  {doneCount} / {checks.length} required fields
+                </p>
+
+                {doneCount === checks.length && (
+                  <div className="mt-3 px-3 py-2 bg-green-50 border border-green-200 rounded text-center">
+                    <p className="text-[9px] font-bold text-green-700 uppercase tracking-widest">Ready to register</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
+        </div>
       </div>
-      </div>{/* end scrollable content */}
 
       {/* ── Action buttons — always visible at bottom ── */}
       <div className="shrink-0 px-5 pb-6 flex items-center justify-end gap-2 border-t border-slate-200 pt-4 bg-white">
         <button
           type="button"
           onClick={() => navigate('/guardians')}
-          className="flex items-center gap-1.5 px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+          className="flex items-center gap-1.5 px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded hover:bg-slate-100 transition-colors cursor-pointer"
         >
           <X className="w-3.5 h-3.5" /> Cancel
         </button>
         <button
           type="submit"
           disabled={submitting}
-          className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-green-500 hover:bg-green-600 disabled:opacity-50 rounded-lg transition-colors cursor-pointer"
+          className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-green-500 hover:bg-green-600 disabled:opacity-50 rounded transition-colors cursor-pointer"
         >
           <Save className="w-3.5 h-3.5" /> {submitting ? 'Saving…' : 'Save registration'}
         </button>

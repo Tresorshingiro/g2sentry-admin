@@ -1,23 +1,26 @@
-import { Download, Pencil, Plus, Search, Shield, UserCheck, UserX, Users } from 'lucide-react';
+import { FileDown, Loader2, Pencil, Plus, Search, Shield, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { exportGuardiansPDF } from '@/lib/export-guardians-pdf';
 import { cn } from '@/lib/utils';
-import { fetchGuardianRoster } from '@/services/api';
+import { deleteGuardianUser, fetchGuardianRoster } from '@/services/api';
 import type {
   GuardianFilter,
   GuardianListItem,
 } from '@/types/guardian-roster';
 
+const IBM = "'IBM Plex Sans', system-ui, sans-serif";
+
 // ── Avatar colours — solid, high-contrast ──────────────────────────────────
 const AVATAR_COLORS = [
-  'bg-slate-700',
-  'bg-green-700',
-  'bg-blue-700',
-  'bg-violet-700',
-  'bg-amber-600',
-  'bg-rose-700',
-  'bg-cyan-700',
-  'bg-teal-700',
+  'bg-slate-700 text-white',
+  'bg-green-700 text-white',
+  'bg-blue-700 text-white',
+  'bg-violet-700 text-white',
+  'bg-amber-600 text-white',
+  'bg-rose-700 text-white',
+  'bg-cyan-700 text-white',
+  'bg-teal-700 text-white',
 ];
 
 function toInitials(name: string | null, phone: string) {
@@ -78,19 +81,15 @@ function filterToParams(f: GuardianFilter): { status?: string; verificationStatu
 
 // ── Stat card ──────────────────────────────────────────────────────────────
 function StatCard({
-  icon: Icon,
   label,
   value,
-  iconBg,
-  iconColor,
+  accentColor,
   onClick,
   active,
 }: {
-  icon: React.ElementType;
   label: string;
   value: number | null;
-  iconBg: string;
-  iconColor: string;
+  accentColor: string;
   onClick: () => void;
   active: boolean;
 }) {
@@ -99,19 +98,15 @@ function StatCard({
       type="button"
       onClick={onClick}
       className={cn(
-        'flex items-center gap-3.5 px-4 py-3.5 bg-white rounded-xl border text-left transition-all cursor-pointer hover:shadow-sm',
-        active ? 'border-green-500 ring-1 ring-green-500/30' : 'border-slate-200 hover:border-slate-300',
+        'flex flex-col px-4 py-3.5 bg-white border border-slate-200 border-t-[3px] rounded text-left transition-colors cursor-pointer w-full',
+        accentColor,
+        active ? 'ring-2 ring-[#14B87A]/25' : 'hover:bg-slate-50/80',
       )}
     >
-      <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', iconBg)}>
-        <Icon className={cn('w-4 h-4', iconColor)} />
-      </div>
-      <div>
-        <p className="text-xl font-bold text-slate-900 leading-none">
-          {value === null ? <span className="text-slate-300">—</span> : value}
-        </p>
-        <p className="text-xs text-slate-500 mt-0.5">{label}</p>
-      </div>
+      <p className="font-mono text-2xl font-bold text-slate-900 leading-none tabular-nums">
+        {value === null ? <span className="text-slate-300">—</span> : value}
+      </p>
+      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-2">{label}</p>
     </button>
   );
 }
@@ -126,15 +121,16 @@ export function GuardiansPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
+  const [search, setSearch]           = useState('');
+  const [exporting, setExporting]     = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting]               = useState(false);
 
-  // Stat counts (fetched once on mount)
   const [statTotal,     setStatTotal]     = useState<number | null>(null);
   const [statActive,    setStatActive]    = useState<number | null>(null);
   const [statPending,   setStatPending]   = useState<number | null>(null);
   const [statSuspended, setStatSuspended] = useState<number | null>(null);
 
-  // Parallel stat fetches on mount
   useEffect(() => {
     void Promise.all([
       fetchGuardianRoster(1, 1),
@@ -149,7 +145,6 @@ export function GuardiansPage() {
     }).catch(() => {});
   }, []);
 
-  // Main list fetch
   useEffect(() => {
     setLoading(true);
     setFetchError(null);
@@ -170,7 +165,55 @@ export function GuardiansPage() {
     setPage(1);
   }
 
-  // Client-side search filter (searches name + code + phone)
+  async function handleExportPDF() {
+    setExporting(true);
+    try {
+      const { status, verificationStatus } = filterToParams(filter);
+      const BATCH = 100;
+      const first = await fetchGuardianRoster(1, BATCH, status, verificationStatus);
+      const totalCount = first.meta.total;
+      const totalPages = Math.ceil(totalCount / BATCH);
+      let allItems = [...first.items];
+      if (totalPages > 1) {
+        const rest = await Promise.all(
+          Array.from({ length: totalPages - 1 }, (_, i) =>
+            fetchGuardianRoster(i + 2, BATCH, status, verificationStatus),
+          ),
+        );
+        for (const res of rest) allItems = [...allItems, ...res.items];
+      }
+      const filterLabel = filter === 'ALL'       ? 'All guardians'
+        : filter === 'ACTIVE'    ? 'Active'
+        : filter === 'VETTING'   ? 'Pending vetting'
+        : filter === 'SUSPENDED' ? 'Suspended'
+        : filter;
+      exportGuardiansPDF(
+        allItems,
+        { total: statTotal, active: statActive, pending: statPending, suspended: statSuspended },
+        filterLabel,
+      );
+    } catch {
+      // silently fail
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function handleDelete(userId: string) {
+    setDeleting(true);
+    try {
+      await deleteGuardianUser(userId);
+      setItems((prev) => prev.filter((g) => g.user.id !== userId));
+      setTotal((t) => Math.max(0, t - 1));
+      setStatTotal((n) => (n !== null ? Math.max(0, n - 1) : null));
+    } catch {
+      // silently fail
+    } finally {
+      setDeleting(false);
+      setConfirmDeleteId(null);
+    }
+  }
+
   const visible = search.trim()
     ? items.filter((g) => {
         const q = search.toLowerCase();
@@ -199,19 +242,31 @@ export function GuardiansPage() {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto bg-slate-50">
+    <div className="flex flex-col h-full overflow-y-auto bg-slate-50" style={{ fontFamily: IBM }}>
 
       <div className="p-4 sm:p-5 space-y-4">
         {/* Actions row */}
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-slate-400">
+          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
             {statTotal !== null ? `${statTotal} registered guardians · Rwanda` : ''}
           </p>
           <div className="flex items-center gap-2">
-            <button type="button" className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer">
-              <Download className="w-3.5 h-3.5" /> Export CSV
+            <button
+              type="button"
+              onClick={handleExportPDF}
+              disabled={exporting}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-600 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 transition-colors cursor-pointer"
+            >
+              {exporting
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : <FileDown className="w-3.5 h-3.5" />}
+              {exporting ? 'Generating…' : 'Export PDF'}
             </button>
-            <button type="button" onClick={() => navigate('/guardians/new')} className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white bg-green-500 hover:bg-green-600 rounded-lg transition-colors cursor-pointer">
+            <button
+              type="button"
+              onClick={() => navigate('/guardians/new')}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white bg-green-500 hover:bg-green-600 rounded transition-colors cursor-pointer"
+            >
               <Plus className="w-3.5 h-3.5" /> Register guardian
             </button>
           </div>
@@ -219,18 +274,17 @@ export function GuardiansPage() {
 
         {/* ── Stat cards ── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatCard icon={Users}     label="Total guardians"  value={statTotal}     iconBg="bg-slate-100" iconColor="text-slate-600" onClick={() => handleFilterChange('ALL')}       active={filter === 'ALL'} />
-          <StatCard icon={UserCheck} label="Active"           value={statActive}    iconBg="bg-green-100" iconColor="text-green-600" onClick={() => handleFilterChange('ACTIVE')}    active={filter === 'ACTIVE'} />
-          <StatCard icon={Shield}    label="Pending vetting"  value={statPending}   iconBg="bg-amber-100" iconColor="text-amber-600" onClick={() => handleFilterChange('VETTING')}   active={filter === 'VETTING'} />
-          <StatCard icon={UserX}     label="Suspended"        value={statSuspended} iconBg="bg-red-100"   iconColor="text-red-500"   onClick={() => handleFilterChange('SUSPENDED')} active={filter === 'SUSPENDED'} />
+          <StatCard label="Total guardians"  value={statTotal}     accentColor="border-t-slate-400"  onClick={() => handleFilterChange('ALL')}       active={filter === 'ALL'} />
+          <StatCard label="Active"           value={statActive}    accentColor="border-t-[#14B87A]"  onClick={() => handleFilterChange('ACTIVE')}    active={filter === 'ACTIVE'} />
+          <StatCard label="Pending vetting"  value={statPending}   accentColor="border-t-amber-400"  onClick={() => handleFilterChange('VETTING')}   active={filter === 'VETTING'} />
+          <StatCard label="Suspended"        value={statSuspended} accentColor="border-t-red-500"    onClick={() => handleFilterChange('SUSPENDED')} active={filter === 'SUSPENDED'} />
         </div>
 
         {/* ── Table card ── */}
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="bg-white rounded border border-slate-200 overflow-hidden">
 
           {/* Controls row */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 border-b border-slate-100">
-            {/* Filter tabs */}
             <div className="flex items-center gap-0 overflow-x-auto">
               {TABS.map(({ key, label }) => (
                 <button
@@ -248,8 +302,6 @@ export function GuardiansPage() {
                 </button>
               ))}
             </div>
-
-            {/* Search */}
             <div className="relative w-full sm:w-auto">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
               <input
@@ -257,29 +309,160 @@ export function GuardiansPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search by name, code, district…"
-                className="w-full sm:w-56 pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20 transition-colors"
+                className="w-full sm:w-56 pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20 transition-colors"
               />
             </div>
           </div>
 
           {fetchError && (
-            <div className="mx-4 mt-3 px-3 py-2.5 bg-red-50 border border-red-100 rounded-lg text-xs text-red-600">
+            <div className="mx-4 mt-3 px-3 py-2.5 bg-red-50 border border-red-100 rounded text-xs text-red-600">
               {fetchError}
             </div>
           )}
 
-          {/* Table */}
-          <div className="overflow-x-auto">
+          {/* ── Mobile card list (hidden on md+) ── */}
+          <div className="md:hidden divide-y divide-slate-50">
+            {loading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 px-4 py-3.5">
+                  <div className="w-10 h-10 rounded bg-slate-100 animate-pulse shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3.5 bg-slate-100 rounded animate-pulse w-3/5" />
+                    <div className="h-3 bg-slate-100 rounded animate-pulse w-2/5" />
+                  </div>
+                </div>
+              ))
+            ) : visible.length === 0 ? (
+              <div className="px-4 py-16 text-center">
+                <Shield className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                <p className="text-sm text-slate-400">
+                  {search ? 'No guardians match your search' : 'No guardians found'}
+                </p>
+              </div>
+            ) : (
+              visible.map((g, i) => {
+                const isDeleted  = g.user.status === 'DELETED';
+                const statusInfo = resolveStatus(g);
+                const vetting    = vettingStyle(g.verificationStatus);
+                const rating     = Number(g.rating);
+                const ini        = isDeleted
+                  ? g.guardianCode.slice(-2).toUpperCase()
+                  : toInitials(g.user.fullName, g.user.phoneNumber);
+                const avatarBg   = isDeleted ? 'bg-slate-200 text-slate-400' : AVATAR_COLORS[i % AVATAR_COLORS.length];
+
+                return (
+                  <div
+                    key={g.id}
+                    onClick={() => !isDeleted && navigate(`/guardians/${g.id}`)}
+                    className={cn(
+                      'flex items-start gap-3 px-4 py-3.5',
+                      isDeleted ? 'opacity-50 cursor-default' : 'hover:bg-slate-50/80 cursor-pointer active:bg-slate-100',
+                    )}
+                  >
+                    <div className={cn('w-10 h-10 rounded flex items-center justify-center text-xs font-bold shrink-0 select-none', avatarBg)}>
+                      {ini}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className={cn('text-sm font-semibold leading-tight truncate', isDeleted ? 'text-slate-400 italic' : 'text-slate-900')}>
+                          {isDeleted ? 'Deleted account' : (g.user.fullName ?? formatPhone(g.user.phoneNumber))}
+                        </p>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <div className={cn('w-1.5 h-1.5 rounded-full', statusInfo.dot)} />
+                          <span className={cn('text-[11px] font-medium', statusInfo.text)}>{statusInfo.label}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <code className="text-[10px] text-slate-400 font-mono">{g.guardianCode}</code>
+                        {g.user.fullName && (
+                          <>
+                            <span className="text-slate-300">·</span>
+                            <span className="text-[10px] text-slate-400 truncate">{formatPhone(g.user.phoneNumber)}</span>
+                          </>
+                        )}
+                      </div>
+
+                      <div className="flex items-center flex-wrap gap-1.5 mt-1.5">
+                        {g.districtBase && (
+                          <span className="text-[11px] text-slate-500">{g.districtBase}</span>
+                        )}
+                        {g.employmentType && (
+                          <>
+                            <span className="text-slate-300">·</span>
+                            <span className={cn('inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium', employmentCls(g.employmentType))}>
+                              {employmentLabel(g.employmentType)}
+                            </span>
+                          </>
+                        )}
+                        <span className={cn('inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold', vetting.cls)}>
+                          {vetting.label}
+                        </span>
+                        {rating > 0 && (
+                          <span className="font-mono text-[11px] font-semibold text-slate-600">★ {rating.toFixed(1)}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {!isDeleted && (
+                      <div className="flex items-center gap-1 shrink-0 mt-0.5" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/guardians/${g.id}/edit`)}
+                          className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors cursor-pointer"
+                          aria-label="Edit guardian"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        {confirmDeleteId === g.user.id ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              disabled={deleting}
+                              onClick={() => handleDelete(g.user.id)}
+                              className="px-2 py-1 text-[10px] font-semibold text-white bg-red-500 hover:bg-red-600 rounded transition-colors cursor-pointer disabled:opacity-50"
+                            >
+                              {deleting ? '…' : 'Confirm'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(null)}
+                              className="px-2 py-1 text-[10px] font-medium text-slate-500 bg-slate-100 hover:bg-slate-200 rounded transition-colors cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteId(g.user.id)}
+                            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors cursor-pointer"
+                            aria-label="Delete guardian"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* ── Desktop table (hidden below md) ── */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-slate-100">
-                  <th className="px-4 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-widest w-64">Guardian</th>
-                  <th className="px-4 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-widest">Status</th>
-                  <th className="px-4 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-widest">District</th>
-                  <th className="px-4 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-widest">Type</th>
-                  <th className="px-4 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-widest">Rating</th>
-                  <th className="px-4 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-widest">Vetting</th>
-                  <th className="px-4 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-widest w-24">Actions</th>
+                  <th className="px-4 py-3 text-[9px] font-bold text-slate-400 uppercase tracking-widest w-64">Guardian</th>
+                  <th className="px-4 py-3 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
+                  <th className="px-4 py-3 text-[9px] font-bold text-slate-400 uppercase tracking-widest">District</th>
+                  <th className="px-4 py-3 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Type</th>
+                  <th className="px-4 py-3 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Rating</th>
+                  <th className="px-4 py-3 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Vetting</th>
+                  <th className="px-4 py-3 text-[9px] font-bold text-slate-400 uppercase tracking-widest w-24">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -308,7 +491,7 @@ export function GuardiansPage() {
                     const statusInfo = resolveStatus(g);
                     const vetting    = vettingStyle(g.verificationStatus);
                     const rating     = Number(g.rating);
-                    const initials   = isDeleted
+                    const ini2       = isDeleted
                       ? g.guardianCode.slice(-2).toUpperCase()
                       : toInitials(g.user.fullName, g.user.phoneNumber);
                     const avatarBg   = isDeleted
@@ -330,10 +513,10 @@ export function GuardiansPage() {
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-3">
                             <div className={cn(
-                              'w-9 h-9 rounded-xl flex items-center justify-center text-[11px] font-bold shrink-0 select-none',
+                              'w-9 h-9 rounded flex items-center justify-center text-[11px] font-bold shrink-0 select-none',
                               avatarBg,
                             )}>
-                              {initials}
+                              {ini2}
                             </div>
                             {isDeleted ? (
                               <div className="min-w-0">
@@ -378,7 +561,7 @@ export function GuardiansPage() {
                         <td className="px-4 py-3.5">
                           {g.employmentType ? (
                             <span className={cn(
-                              'inline-flex px-2 py-0.5 rounded-md text-[11px] font-medium',
+                              'inline-flex px-2 py-0.5 rounded text-[11px] font-medium',
                               employmentCls(g.employmentType),
                             )}>
                               {employmentLabel(g.employmentType)}
@@ -398,7 +581,7 @@ export function GuardiansPage() {
                                   style={{ width: `${(rating / 5) * 100}%` }}
                                 />
                               </div>
-                              <span className="text-xs font-semibold text-slate-700 tabular-nums">
+                              <span className="font-mono text-xs font-semibold text-slate-700 tabular-nums">
                                 {rating.toFixed(1)}
                               </span>
                             </div>
@@ -409,7 +592,7 @@ export function GuardiansPage() {
 
                         {/* Vetting */}
                         <td className="px-4 py-3.5">
-                          <span className={cn('inline-flex px-2 py-0.5 rounded-md text-[11px] font-semibold', vetting.cls)}>
+                          <span className={cn('inline-flex px-2 py-0.5 rounded text-[11px] font-semibold', vetting.cls)}>
                             {vetting.label}
                           </span>
                         </td>
@@ -418,23 +601,53 @@ export function GuardiansPage() {
                         <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center gap-1">
                             {!isDeleted && (
-                            <button
-                              type="button"
-                              onClick={() => navigate(`/guardians/${g.id}`)}
-                              className="px-2.5 py-1 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors cursor-pointer"
-                            >
-                              View
-                            </button>
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/guardians/${g.id}`)}
+                                className="px-2.5 py-1 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded transition-colors cursor-pointer"
+                              >
+                                View
+                              </button>
                             )}
                             {!isDeleted && (
                               <button
                                 type="button"
                                 onClick={() => navigate(`/guardians/${g.id}/edit`)}
-                                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
+                                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors cursor-pointer"
                                 aria-label="Edit guardian"
                               >
                                 <Pencil className="w-3.5 h-3.5" />
                               </button>
+                            )}
+                            {!isDeleted && (
+                              confirmDeleteId === g.user.id ? (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    disabled={deleting}
+                                    onClick={() => handleDelete(g.user.id)}
+                                    className="px-2 py-1 text-[10px] font-semibold text-white bg-red-500 hover:bg-red-600 rounded transition-colors cursor-pointer disabled:opacity-50"
+                                  >
+                                    {deleting ? '…' : 'Confirm'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmDeleteId(null)}
+                                    className="px-2 py-1 text-[10px] font-medium text-slate-500 bg-slate-100 hover:bg-slate-200 rounded transition-colors cursor-pointer"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteId(g.user.id)}
+                                  className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors cursor-pointer"
+                                  aria-label="Delete guardian"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )
                             )}
                           </div>
                         </td>
@@ -449,24 +662,21 @@ export function GuardiansPage() {
           {/* Pagination */}
           {!loading && totalPages > 1 && (
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 border-t border-slate-100">
-              <span className="text-xs text-slate-500">
-                Showing {(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)} of {total} guardians
+              <span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest">
+                {(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)} of {total} guardians
               </span>
               <div className="flex items-center gap-1">
-                {/* Prev */}
                 <button
                   type="button"
                   disabled={page === 1}
                   onClick={() => setPage((p) => p - 1)}
-                  className="w-7 h-7 flex items-center justify-center rounded-md border border-slate-200 text-slate-500 disabled:opacity-30 hover:bg-slate-50 transition-colors cursor-pointer text-sm"
+                  className="w-7 h-7 flex items-center justify-center rounded border border-slate-200 text-slate-500 disabled:opacity-30 hover:bg-slate-50 transition-colors cursor-pointer text-sm"
                 >
                   ‹
                 </button>
-
-                {/* Page numbers with ellipsis */}
                 {getPageNumbers(page, totalPages).map((n, i) =>
                   n === '…' ? (
-                    <span key={`ellipsis-${i}`} className="w-7 h-7 flex items-center justify-center text-xs text-slate-400">
+                    <span key={`ellipsis-${i}`} className="w-7 h-7 flex items-center justify-center font-mono text-xs text-slate-400">
                       …
                     </span>
                   ) : (
@@ -475,7 +685,7 @@ export function GuardiansPage() {
                       type="button"
                       onClick={() => setPage(n)}
                       className={cn(
-                        'w-7 h-7 flex items-center justify-center rounded-md text-xs font-medium border transition-colors cursor-pointer',
+                        'w-7 h-7 flex items-center justify-center rounded font-mono text-xs font-medium border transition-colors cursor-pointer',
                         page === n
                           ? 'bg-slate-900 text-white border-slate-900'
                           : 'border-slate-200 text-slate-600 hover:bg-slate-50',
@@ -485,13 +695,11 @@ export function GuardiansPage() {
                     </button>
                   ),
                 )}
-
-                {/* Next */}
                 <button
                   type="button"
                   disabled={page >= totalPages}
                   onClick={() => setPage((p) => p + 1)}
-                  className="w-7 h-7 flex items-center justify-center rounded-md border border-slate-200 text-slate-500 disabled:opacity-30 hover:bg-slate-50 transition-colors cursor-pointer text-sm"
+                  className="w-7 h-7 flex items-center justify-center rounded border border-slate-200 text-slate-500 disabled:opacity-30 hover:bg-slate-50 transition-colors cursor-pointer text-sm"
                 >
                   ›
                 </button>

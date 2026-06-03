@@ -18,6 +18,8 @@ import { PermissionGate } from '@/components/auth/PermissionGate';
 import { cn } from '@/lib/utils';
 import { cancelJob, completeJob, dispatchJob, fetchAssignmentById, fetchJobIncidents, type FieldIncident } from '@/services/api';
 
+const IBM = "'IBM Plex Sans', system-ui, sans-serif";
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Guardian {
   id: string;
@@ -78,13 +80,13 @@ interface JobDetail {
 
 // ── Status / priority configs ─────────────────────────────────────────────────
 const JOB_STATUS: Record<string, { dot: string; text: string; badge: string; label: string }> = {
-  PENDING:     { dot: 'bg-amber-400',  text: 'text-amber-700',  badge: 'bg-amber-100 text-amber-700',  label: 'Pending dispatch' },
-  DISPATCHING: { dot: 'bg-blue-400',   text: 'text-blue-700',   badge: 'bg-blue-100 text-blue-700',    label: 'Dispatching' },
+  PENDING:     { dot: 'bg-amber-400',  text: 'text-amber-700',  badge: 'bg-amber-100 text-amber-700',   label: 'Pending dispatch' },
+  DISPATCHING: { dot: 'bg-blue-400',   text: 'text-blue-700',   badge: 'bg-blue-100 text-blue-700',     label: 'Dispatching' },
   ASSIGNED:    { dot: 'bg-purple-400', text: 'text-purple-700', badge: 'bg-purple-100 text-purple-700', label: 'Assigned' },
-  IN_PROGRESS: { dot: 'bg-green-500',  text: 'text-green-700',  badge: 'bg-green-100 text-green-700',  label: 'On duty' },
-  COMPLETED:   { dot: 'bg-slate-400',  text: 'text-slate-500',  badge: 'bg-slate-100 text-slate-600',  label: 'Completed' },
-  FAILED:      { dot: 'bg-red-500',    text: 'text-red-700',    badge: 'bg-red-100 text-red-700',      label: 'Failed' },
-  CANCELLED:   { dot: 'bg-red-400',    text: 'text-red-600',    badge: 'bg-red-100 text-red-600',      label: 'Cancelled' },
+  IN_PROGRESS: { dot: 'bg-green-500',  text: 'text-green-700',  badge: 'bg-green-100 text-green-700',   label: 'On duty' },
+  COMPLETED:   { dot: 'bg-slate-400',  text: 'text-slate-500',  badge: 'bg-slate-100 text-slate-600',   label: 'Completed' },
+  FAILED:      { dot: 'bg-red-500',    text: 'text-red-700',    badge: 'bg-red-100 text-red-700',       label: 'Failed' },
+  CANCELLED:   { dot: 'bg-red-400',    text: 'text-red-600',    badge: 'bg-red-100 text-red-600',       label: 'Cancelled' },
 };
 
 const ASSIGNMENT_STATUS: Record<string, { badge: string; label: string; dot: string }> = {
@@ -150,12 +152,12 @@ function Card({ icon, title, count, children }: {
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden mb-4">
+    <div className="bg-white rounded border border-slate-200 overflow-hidden mb-4">
       <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-slate-100 bg-slate-50/60">
         {icon}
-        <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+        <h3 className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{title}</h3>
         {count !== undefined && (
-          <span className="ml-auto px-1.5 py-0.5 text-[10px] font-semibold bg-slate-100 text-slate-500 rounded-md">
+          <span className="ml-auto px-1.5 py-0.5 text-[10px] font-semibold bg-slate-100 text-slate-500 rounded font-mono">
             {count}
           </span>
         )}
@@ -169,7 +171,7 @@ function Card({ icon, title, count, children }: {
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-start justify-between py-2.5 border-b border-slate-100 last:border-0 gap-3">
-      <span className="text-xs text-slate-400 shrink-0 pt-0.5">{label}</span>
+      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest shrink-0 pt-1">{label}</span>
       <div className="text-right">{children}</div>
     </div>
   );
@@ -187,23 +189,29 @@ export function AssignmentDetailPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [incidents, setIncidents] = useState<FieldIncident[]>([]);
 
-  async function load() {
+  useEffect(() => {
     if (!id) return;
-    try {
-      const [jobData, incidentData] = await Promise.all([
-        fetchAssignmentById(id),
-        fetchJobIncidents(id).catch(() => []),
-      ]);
-      setJob(jobData as JobDetail);
-      setIncidents(incidentData);
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Failed to load job');
-    } finally {
-      setLoading(false);
+    const jobId = id;
+    let cancelled = false;
+    async function load() {
+      try {
+        const [jobData, incidentData] = await Promise.all([
+          fetchAssignmentById(jobId),
+          fetchJobIncidents(jobId).catch(() => []),
+        ]);
+        if (!cancelled) {
+          setJob(jobData as JobDetail);
+          setIncidents(incidentData);
+        }
+      } catch (err) {
+        if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Failed to load job');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
-  }
-
-  useEffect(() => { void load(); }, [id]);
+    void load();
+    return () => { cancelled = true; };
+  }, [id]);
 
   async function handleAction(fn: () => Promise<unknown>, msg: string) {
     if (!id || actionLoading) return;
@@ -231,37 +239,35 @@ export function AssignmentDetailPage() {
   if (!job)      return <div className="p-6 text-slate-500">Job not found.</div>;
 
   const isDone          = ['COMPLETED', 'CANCELLED', 'FAILED'].includes(job.status);
-  const status          = JOB_STATUS[job.status]   ?? { dot: 'bg-slate-400', badge: 'bg-slate-100 text-slate-600', label: job.status, text: 'text-slate-600' };
+  const status          = JOB_STATUS[job.status]    ?? { dot: 'bg-slate-400', badge: 'bg-slate-100 text-slate-600', label: job.status, text: 'text-slate-600' };
   const priority        = PRIORITY_CFG[job.priority] ?? { cls: 'bg-slate-100 text-slate-500', label: job.priority };
   const activeGuardians = job.assignments.filter((a) => ['ACCEPTED','EN_ROUTE','ON_SITE','COMPLETED'].includes(a.status));
   const dateLabel       = relativeDate(job.scheduledStart);
   const isToday         = dateLabel === 'Today';
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto overscroll-contain bg-slate-50">
+    <div className="flex flex-col h-full overflow-y-auto overscroll-contain bg-slate-50" style={{ fontFamily: IBM }}>
 
       {/* ── Dark banner ── */}
-      <div className="relative bg-[#0D1117] px-6 pt-7 pb-6 shrink-0 overflow-hidden">
+      <div className="relative bg-[#0D1117] px-4 pt-5 pb-5 sm:px-6 sm:pt-7 sm:pb-6 shrink-0 overflow-hidden">
         <div
           className="absolute inset-0 opacity-[0.03]"
           style={{ backgroundImage: 'linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px)', backgroundSize: '32px 32px' }}
         />
-        <div className="relative z-10 flex items-start justify-between gap-6">
+        <div className="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
 
           {/* Identity block */}
           <div className="min-w-0">
-            {/* Reference + badges */}
             <div className="flex items-center gap-2.5 flex-wrap mb-2">
               <code className="text-white text-lg font-bold font-mono tracking-tight">{job.referenceNumber}</code>
-              <span className={cn('px-2 py-0.5 rounded-md text-[11px] font-semibold', status.badge)}>
+              <span className={cn('px-2 py-0.5 rounded text-[11px] font-semibold', status.badge)}>
                 {status.label}
               </span>
-              <span className={cn('px-2 py-0.5 rounded-md text-[11px] font-semibold', priority.cls)}>
+              <span className={cn('px-2 py-0.5 rounded text-[11px] font-semibold', priority.cls)}>
                 {priority.label}
               </span>
             </div>
 
-            {/* Job meta */}
             <div className="flex items-center gap-3 text-xs text-slate-400 flex-wrap">
               {job.organization?.legalName && (
                 <span className="flex items-center gap-1.5">
@@ -270,7 +276,7 @@ export function AssignmentDetailPage() {
               )}
               {job.location && (
                 <>
-                  <span className="w-1 h-1 rounded-full bg-slate-600" />
+                  <span className="w-1 h-1 rounded-full bg-slate-600 hidden sm:inline-block" />
                   <span className="flex items-center gap-1.5">
                     <MapPin className="w-3 h-3" />
                     {job.location.name}{job.location.district ? ` · ${job.location.district}` : ''}
@@ -279,37 +285,36 @@ export function AssignmentDetailPage() {
               )}
               {job.jobType && (
                 <>
-                  <span className="w-1 h-1 rounded-full bg-slate-600" />
+                  <span className="w-1 h-1 rounded-full bg-slate-600 hidden sm:inline-block" />
                   <span>{labelify(job.jobType)}</span>
                 </>
               )}
             </div>
 
             {/* Schedule */}
-            <div className="flex items-center gap-2 mt-3">
+            <div className="flex items-center gap-2 mt-3 flex-wrap">
               <div className={cn(
-                'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium',
+                'flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium',
                 isToday ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-white/5 text-slate-400 border border-white/10',
               )}>
                 <Calendar className="w-3 h-3" />
-                {dateLabel} · {fmtTime(job.scheduledStart)}
-                {job.scheduledEnd ? ` – ${fmtTime(job.scheduledEnd)}` : ''}
+                <span className="font-mono">{dateLabel} · {fmtTime(job.scheduledStart)}{job.scheduledEnd ? ` – ${fmtTime(job.scheduledEnd)}` : ''}</span>
               </div>
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-white/5 border border-white/10 text-slate-400">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs bg-white/5 border border-white/10 text-slate-400">
                 <Users className="w-3 h-3" />
-                {activeGuardians.length} / {job.requestedGuardianCount} guardians
+                <span className="font-mono">{activeGuardians.length} / {job.requestedGuardianCount} guardians</span>
               </div>
             </div>
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-2 shrink-0 pt-1">
+          <div className="flex items-center gap-2 flex-wrap sm:shrink-0 sm:pt-1">
             <PermissionGate permission="jobs:dispatch">
               <button
                 type="button"
                 disabled={actionLoading || job.status !== 'PENDING'}
                 onClick={() => handleAction(() => dispatchJob(job.id), 'Job dispatched to nearest available guardians.')}
-                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-30 disabled:cursor-not-allowed rounded transition-colors cursor-pointer"
               >
                 <SendHorizontal className="w-3.5 h-3.5" /> Dispatch
               </button>
@@ -319,7 +324,7 @@ export function AssignmentDetailPage() {
                 type="button"
                 disabled={actionLoading || isDone}
                 onClick={() => handleAction(() => completeJob(job.id), 'Job marked as complete.')}
-                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-green-600 hover:bg-green-700 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-green-600 hover:bg-green-700 disabled:opacity-30 disabled:cursor-not-allowed rounded transition-colors cursor-pointer"
               >
                 <CheckCircle2 className="w-3.5 h-3.5" /> Complete
               </button>
@@ -329,7 +334,7 @@ export function AssignmentDetailPage() {
                 type="button"
                 disabled={actionLoading || isDone}
                 onClick={() => handleAction(() => cancelJob(job.id), 'Job cancelled.')}
-                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-30 disabled:cursor-not-allowed rounded transition-colors cursor-pointer"
               >
                 <XCircle className="w-3.5 h-3.5" /> Cancel
               </button>
@@ -341,7 +346,7 @@ export function AssignmentDetailPage() {
       {/* ── Flash message ── */}
       {actionMsg && (
         <div className={cn(
-          'mx-5 mt-4 px-4 py-2.5 rounded-xl text-sm flex items-center gap-2',
+          'mx-4 sm:mx-5 mt-4 px-4 py-2.5 rounded text-sm flex items-center gap-2',
           actionMsg.ok
             ? 'bg-green-50 border border-green-200 text-green-700'
             : 'bg-red-50 border border-red-200 text-red-700',
@@ -354,24 +359,24 @@ export function AssignmentDetailPage() {
       )}
 
       {/* ── Content grid ── */}
-      <div className="flex gap-5 p-5 items-start">
+      <div className="flex flex-col lg:flex-row gap-4 p-4 sm:p-5 items-start">
 
         {/* ── Left column ── */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 w-full">
 
           {/* Active guardians */}
           <Card
-            icon={<Shield className="w-4 h-4 text-slate-400" />}
+            icon={<Shield className="w-3.5 h-3.5 text-slate-400" />}
             title="Assigned guardians"
             count={activeGuardians.length}
           >
             {/* Staffing bar */}
-            <div className="flex items-center gap-3 mb-4 p-3 bg-slate-50 rounded-lg border border-slate-100">
+            <div className="flex items-center gap-3 mb-4 p-3 bg-slate-50 rounded border border-slate-100">
               <div className="flex-1">
                 <div className="flex items-center justify-between mb-1.5 text-xs">
-                  <span className="text-slate-500">Staffing</span>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Staffing</span>
                   <span className={cn(
-                    'font-semibold tabular-nums',
+                    'font-mono text-xs font-semibold tabular-nums',
                     activeGuardians.length < job.requestedGuardianCount ? 'text-red-500' : 'text-green-600',
                   )}>
                     {activeGuardians.length} / {job.requestedGuardianCount}
@@ -399,9 +404,9 @@ export function AssignmentDetailPage() {
                 {activeGuardians.map((a, i) => {
                   const aStatus = ASSIGNMENT_STATUS[a.status] ?? { badge: 'bg-slate-100 text-slate-500', dot: 'bg-slate-300', label: a.status };
                   return (
-                    <div key={a.id} className="flex items-center gap-3.5 p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+                    <div key={a.id} className="flex items-center gap-3.5 p-3.5 bg-slate-50 rounded border border-slate-200">
                       <div className={cn(
-                        'w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0',
+                        'w-10 h-10 rounded flex items-center justify-center text-white text-xs font-bold shrink-0',
                         AVATAR_COLORS[i % AVATAR_COLORS.length],
                       )}>
                         {guardianInitials(a.guardian.user.fullName, a.guardian.user.phoneNumber)}
@@ -411,7 +416,7 @@ export function AssignmentDetailPage() {
                           {a.guardian.user.fullName ?? a.guardian.user.phoneNumber}
                         </p>
                         <p className="text-xs text-slate-400 mt-0.5">
-                          {a.guardian.guardianCode} · {a.guardian.districtBase}
+                          <code className="font-mono">{a.guardian.guardianCode}</code> · {a.guardian.districtBase}
                         </p>
                       </div>
                       <div className="text-right shrink-0">
@@ -420,12 +425,12 @@ export function AssignmentDetailPage() {
                           <span className="text-xs font-medium text-slate-700">{aStatus.label}</span>
                         </div>
                         {a.acceptedAt && (
-                          <p className="text-[10px] text-slate-400 mt-0.5">
+                          <p className="font-mono text-[10px] text-slate-400 mt-0.5">
                             Accepted {fmt(a.acceptedAt)}
                           </p>
                         )}
                         {a.arrivedAt && (
-                          <p className="text-[10px] text-slate-400">
+                          <p className="font-mono text-[10px] text-slate-400">
                             Arrived {fmt(a.arrivedAt)}
                           </p>
                         )}
@@ -440,16 +445,46 @@ export function AssignmentDetailPage() {
           {/* Dispatch history */}
           {job.assignments.length > 0 && (
             <Card
-              icon={<SendHorizontal className="w-4 h-4 text-slate-400" />}
+              icon={<SendHorizontal className="w-3.5 h-3.5 text-slate-400" />}
               title="Dispatch history"
               count={job.assignments.length}
             >
-              <div className="overflow-x-auto -mx-5">
+              {/* Mobile cards */}
+              <div className="md:hidden -mx-5 divide-y divide-slate-50">
+                {job.assignments.map((a) => {
+                  const aStatus = ASSIGNMENT_STATUS[a.status] ?? { badge: 'bg-slate-100 text-slate-500', dot: 'bg-slate-300', label: a.status };
+                  return (
+                    <div key={a.id} className="px-5 py-3.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <code className="font-mono text-[11px] text-slate-400 shrink-0">#{a.assignmentRound}</code>
+                          <p className="text-sm font-medium text-slate-900 truncate">
+                            {a.guardian.user.fullName ?? a.guardian.user.phoneNumber}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <div className={cn('w-1.5 h-1.5 rounded-full', aStatus.dot)} />
+                          <span className="text-xs font-medium text-slate-700">{aStatus.label}</span>
+                        </div>
+                      </div>
+                      <p className="font-mono text-xs text-slate-400 mt-0.5">{a.guardian.guardianCode}</p>
+                      {a.noShowReason && <p className="text-xs text-red-500 mt-0.5">{a.noShowReason}</p>}
+                      <p className="font-mono text-[11px] text-slate-400 mt-1.5">
+                        Offered {fmt(a.offerSentAt)}
+                        {a.expiresAt ? ` · Exp. ${fmt(a.expiresAt)}` : ''}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop table */}
+              <div className="hidden md:block overflow-x-auto -mx-5">
                 <table className="w-full text-left">
                   <thead>
                     <tr className="border-b border-slate-100">
                       {['Round', 'Guardian', 'Status', 'Offered at', 'Expires'].map((h) => (
-                        <th key={h} className="px-5 py-2.5 text-[11px] font-semibold text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                        <th key={h} className="px-5 py-2.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">
                           {h}
                         </th>
                       ))}
@@ -460,24 +495,22 @@ export function AssignmentDetailPage() {
                       const aStatus = ASSIGNMENT_STATUS[a.status] ?? { badge: 'bg-slate-100 text-slate-500', dot: 'bg-slate-300', label: a.status };
                       return (
                         <tr key={a.id} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="px-5 py-3 text-xs text-slate-400 font-mono">#{a.assignmentRound}</td>
+                          <td className="px-5 py-3 font-mono text-xs text-slate-400">#{a.assignmentRound}</td>
                           <td className="px-5 py-3">
                             <p className="text-sm font-medium text-slate-900">
                               {a.guardian.user.fullName ?? a.guardian.user.phoneNumber}
                             </p>
-                            <p className="text-xs text-slate-400">{a.guardian.guardianCode}</p>
+                            <p className="font-mono text-xs text-slate-400">{a.guardian.guardianCode}</p>
                           </td>
                           <td className="px-5 py-3">
                             <div className="flex items-center gap-1.5">
                               <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', aStatus.dot)} />
                               <span className="text-xs font-medium text-slate-700">{aStatus.label}</span>
                             </div>
-                            {a.noShowReason && (
-                              <p className="text-xs text-red-500 mt-0.5">{a.noShowReason}</p>
-                            )}
+                            {a.noShowReason && <p className="text-xs text-red-500 mt-0.5">{a.noShowReason}</p>}
                           </td>
-                          <td className="px-5 py-3 text-xs text-slate-500 whitespace-nowrap">{fmt(a.offerSentAt)}</td>
-                          <td className="px-5 py-3 text-xs text-slate-500 whitespace-nowrap">{fmt(a.expiresAt)}</td>
+                          <td className="px-5 py-3 font-mono text-xs text-slate-500 whitespace-nowrap">{fmt(a.offerSentAt)}</td>
+                          <td className="px-5 py-3 font-mono text-xs text-slate-500 whitespace-nowrap">{fmt(a.expiresAt)}</td>
                         </tr>
                       );
                     })}
@@ -487,7 +520,7 @@ export function AssignmentDetailPage() {
 
               {/* Dispatch progress */}
               <div className="mt-4 pt-4 border-t border-slate-100 flex items-center gap-3">
-                <p className="text-xs text-slate-400">Dispatch attempts</p>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Dispatch attempts</p>
                 <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                   <div
                     className={cn('h-full rounded-full', job.dispatchAttempts >= job.maxDispatchAttempts ? 'bg-red-400' : 'bg-blue-400')}
@@ -495,7 +528,7 @@ export function AssignmentDetailPage() {
                   />
                 </div>
                 <span className={cn(
-                  'text-xs font-semibold tabular-nums',
+                  'font-mono text-xs font-semibold tabular-nums',
                   job.dispatchAttempts >= job.maxDispatchAttempts ? 'text-red-500' : 'text-slate-700',
                 )}>
                   {job.dispatchAttempts} / {job.maxDispatchAttempts}
@@ -506,7 +539,7 @@ export function AssignmentDetailPage() {
 
           {/* Status timeline */}
           <Card
-            icon={<Clock className="w-4 h-4 text-slate-400" />}
+            icon={<Clock className="w-3.5 h-3.5 text-slate-400" />}
             title="Status timeline"
             count={job.statusHistory.length}
           >
@@ -514,21 +547,17 @@ export function AssignmentDetailPage() {
               <p className="text-sm text-slate-400 text-center py-4">No status changes yet.</p>
             ) : (
               <div className="relative">
-                {/* Vertical line */}
                 <div className="absolute left-[11px] top-3 bottom-3 w-px bg-slate-200" />
                 <div className="space-y-4">
                   {job.statusHistory.map((h, i) => {
-                    const isFirst = i === 0;
+                    const isFirst  = i === 0;
                     const toStatus = JOB_STATUS[h.newStatus];
                     return (
                       <div key={h.id} className="flex gap-3.5 relative">
-                        {/* Dot */}
                         <div className={cn(
-                          'w-5.5 h-[22px] rounded-full flex items-center justify-center ring-2 ring-white shrink-0 mt-0.5 z-10',
+                          'w-5 h-5 rounded-full flex items-center justify-center ring-2 ring-white shrink-0 mt-0.5 z-10',
                           toStatus?.dot ?? 'bg-slate-300',
-                          'w-5 h-5',
                         )} />
-                        {/* Content */}
                         <div className={cn('flex-1 pb-1', !isFirst && 'border-0')}>
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-xs font-semibold text-slate-700">
@@ -541,7 +570,7 @@ export function AssignmentDetailPage() {
                           {h.reason && (
                             <p className="text-xs text-slate-500 mt-0.5">{h.reason}</p>
                           )}
-                          <p className="text-[10px] text-slate-400 mt-0.5">{fmt(h.changedAt)}</p>
+                          <p className="font-mono text-[10px] text-slate-400 mt-0.5">{fmt(h.changedAt)}</p>
                         </div>
                       </div>
                     );
@@ -552,7 +581,7 @@ export function AssignmentDetailPage() {
           </Card>
 
           {/* Field incidents */}
-          <Card icon={<Siren className="w-4 h-4 text-slate-400" />} title="Field incidents" count={incidents.length}>
+          <Card icon={<Siren className="w-3.5 h-3.5 text-slate-400" />} title="Field incidents" count={incidents.length}>
             {incidents.length === 0 ? (
               <div className="text-center py-6">
                 <AlertTriangle className="w-8 h-8 text-slate-200 mx-auto mb-2" />
@@ -568,17 +597,17 @@ export function AssignmentDetailPage() {
                     LOW:      'bg-slate-100 text-slate-600 ring-1 ring-slate-200',
                   };
                   return (
-                    <div key={inc.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                    <div key={inc.id} className="p-4 bg-slate-50 rounded border border-slate-200">
                       <div className="flex items-start justify-between gap-3 mb-2">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-semibold text-slate-900">
                             {labelify(inc.incidentType)}
                           </span>
-                          <span className={cn('px-2 py-0.5 rounded-md text-[11px] font-semibold', severityColors[inc.severity] ?? severityColors.LOW)}>
+                          <span className={cn('px-2 py-0.5 rounded text-[11px] font-semibold', severityColors[inc.severity] ?? severityColors.LOW)}>
                             {labelify(inc.severity)}
                           </span>
                         </div>
-                        <span className="text-[11px] text-slate-400 shrink-0">{fmt(inc.createdAt)}</span>
+                        <span className="font-mono text-[11px] text-slate-400 shrink-0">{fmt(inc.createdAt)}</span>
                       </div>
                       <p className="text-sm text-slate-700 mb-2">{inc.description}</p>
                       {inc.reporter && (
@@ -595,23 +624,23 @@ export function AssignmentDetailPage() {
         </div>
 
         {/* ── Right sidebar ── */}
-        <div className="w-72 shrink-0 space-y-4">
+        <div className="w-full lg:w-72 lg:shrink-0 space-y-4">
 
           {/* Job details */}
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="bg-white rounded border border-slate-200 overflow-hidden">
             <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-slate-100 bg-slate-50/60">
-              <Zap className="w-4 h-4 text-slate-400" />
-              <h3 className="text-sm font-semibold text-slate-900">Job details</h3>
+              <Zap className="w-3.5 h-3.5 text-slate-400" />
+              <h3 className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Job details</h3>
             </div>
             <div className="px-5 py-1">
               <InfoRow label="Reference">
-                <code className="text-xs font-mono font-semibold text-green-600">{job.referenceNumber}</code>
+                <code className="font-mono text-xs font-semibold text-green-600">{job.referenceNumber}</code>
               </InfoRow>
               <InfoRow label="Type">
                 <span className="text-sm font-medium text-slate-900">{job.jobType ? labelify(job.jobType) : '—'}</span>
               </InfoRow>
               <InfoRow label="Priority">
-                <span className={cn('inline-flex px-2 py-0.5 rounded-md text-[11px] font-semibold', priority.cls)}>
+                <span className={cn('inline-flex px-2 py-0.5 rounded text-[11px] font-semibold', priority.cls)}>
                   {priority.label}
                 </span>
               </InfoRow>
@@ -621,18 +650,18 @@ export function AssignmentDetailPage() {
                   <span className={cn('text-xs font-medium', status.text)}>{status.label}</span>
                 </div>
               </InfoRow>
-              <InfoRow label="Guardians needed">
-                <span className="text-sm font-semibold text-slate-900">{job.requestedGuardianCount}</span>
+              <InfoRow label="Guardians">
+                <span className="font-mono text-sm font-semibold text-slate-900">{job.requestedGuardianCount}</span>
               </InfoRow>
               <InfoRow label="Start">
                 <div>
-                  <p className={cn('text-xs font-semibold', isToday ? 'text-green-600' : 'text-slate-800')}>{dateLabel}</p>
-                  <p className="text-[11px] text-slate-400">{fmtTime(job.scheduledStart)}</p>
+                  <p className={cn('font-mono text-xs font-semibold', isToday ? 'text-green-600' : 'text-slate-800')}>{dateLabel}</p>
+                  <p className="font-mono text-[11px] text-slate-400">{fmtTime(job.scheduledStart)}</p>
                 </div>
               </InfoRow>
               {job.scheduledEnd && (
                 <InfoRow label="End">
-                  <p className="text-xs text-slate-700 font-medium">{fmtTime(job.scheduledEnd)}</p>
+                  <p className="font-mono text-xs text-slate-700 font-medium">{fmtTime(job.scheduledEnd)}</p>
                 </InfoRow>
               )}
               {job.notes && (
@@ -650,10 +679,10 @@ export function AssignmentDetailPage() {
 
           {/* Location */}
           {job.location && (
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="bg-white rounded border border-slate-200 overflow-hidden">
               <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-slate-100 bg-slate-50/60">
-                <MapPin className="w-4 h-4 text-slate-400" />
-                <h3 className="text-sm font-semibold text-slate-900">Location</h3>
+                <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                <h3 className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Location</h3>
               </div>
               <div className="p-5">
                 <p className="text-sm font-semibold text-slate-900 mb-2">{job.location.name}</p>
@@ -676,11 +705,11 @@ export function AssignmentDetailPage() {
             </div>
           )}
 
-          {/* Incidents notice (placeholder only when no backend data) */}
-          <div className="bg-slate-50 rounded-xl border border-slate-200 p-4">
+          {/* Incidents notice */}
+          <div className="bg-slate-50 rounded border border-slate-200 p-4">
             <div className="flex items-center gap-2 mb-1.5">
               <AlertTriangle className="w-3.5 h-3.5 text-slate-400" />
-              <p className="text-xs font-semibold text-slate-500">Field incidents</p>
+              <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Field incidents</p>
             </div>
             <p className="text-xs text-slate-400">No incidents reported for this job.</p>
           </div>

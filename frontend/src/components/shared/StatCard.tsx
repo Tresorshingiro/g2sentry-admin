@@ -1,48 +1,55 @@
 import { TrendingDown, TrendingUp } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { cn } from '@/lib/utils';
 
 interface StatCardProps {
-  icon: ReactNode;
-  iconBg: string;
+  icon?: ReactNode;
+  iconBg?: string;
   label: string;
   value: string;
   delta: string;
   deltaPositive: boolean;
   deltaLabel: string;
+  accentColor?: string;
+  onClick?: () => void;
 }
 
 export function StatCard({
-  icon,
-  iconBg,
   label,
   value,
   delta,
   deltaPositive,
   deltaLabel,
+  accentColor,
+  onClick,
 }: StatCardProps) {
   return (
-    <div className="bg-white rounded-xl border p-5">
-      <div
-        className={`w-9 h-9 ${iconBg} rounded-lg flex items-center justify-center mb-3`}
-      >
-        {icon}
-      </div>
-      <p className="text-2xl font-bold text-gray-900">{value}</p>
-      <p className="text-sm text-gray-500 mt-0.5">{label}</p>
-      <div className="flex items-center gap-1 mt-2">
+    <div
+      onClick={onClick}
+      className={cn(
+        'bg-white border border-slate-200 border-t-[3px] rounded p-4 transition-colors',
+        accentColor ?? 'border-t-slate-300',
+        onClick && 'cursor-pointer hover:bg-slate-50/80',
+      )}
+    >
+      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-tight mb-2">
+        {label}
+      </p>
+      <p className="font-mono text-2xl font-bold text-slate-900 leading-none tabular-nums">
+        {value}
+      </p>
+      <div className="flex items-center gap-1 mt-2.5">
         {deltaPositive ? (
-          <TrendingUp className="w-3.5 h-3.5 text-green-600" />
+          <TrendingUp className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
         ) : (
-          <TrendingDown className="w-3.5 h-3.5 text-red-500" />
+          <TrendingDown className="w-2.5 h-2.5 text-red-500 shrink-0" />
         )}
-        <span
-          className={`text-xs font-medium ${
-            deltaPositive ? 'text-green-600' : 'text-red-500'
-          }`}
-        >
-          {delta}
-        </span>
-        <span className="text-xs text-gray-400">{deltaLabel}</span>
+        {delta && (
+          <span className={cn('text-[10px] font-medium', deltaPositive ? 'text-emerald-600' : 'text-red-500')}>
+            {delta}
+          </span>
+        )}
+        <span className="text-[10px] text-slate-400 truncate">{deltaLabel}</span>
       </div>
     </div>
   );

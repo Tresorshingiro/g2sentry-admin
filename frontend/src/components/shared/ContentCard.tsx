@@ -14,11 +14,9 @@ export function ContentCard({
   className,
 }: ContentCardProps) {
   return (
-    <div
-      className={`bg-white rounded-xl border border-slate-200 overflow-hidden ${className ?? ''}`}
-    >
-      <div className="flex items-center justify-between px-3.5 py-3 border-b border-slate-100">
-        <h3 className="text-xs font-semibold text-slate-900">{title}</h3>
+    <div className={`bg-white rounded border border-slate-200 overflow-hidden ${className ?? ''}`}>
+      <div className="flex items-center justify-between px-3.5 py-3 border-b border-slate-100 bg-slate-50/60">
+        <h3 className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{title}</h3>
         {action}
       </div>
       <div className="p-3.5">{children}</div>

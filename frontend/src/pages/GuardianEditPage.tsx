@@ -28,6 +28,8 @@ import {
   type UpdateGuardianPayload,
 } from '@/services/api';
 
+const IBM = "'IBM Plex Sans', system-ui, sans-serif";
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 const CERT_TYPE_LABELS: Record<string, string> = {
   FIRST_AID: 'First Aid',
@@ -54,7 +56,7 @@ const SPECIALIZATIONS = [
 // ── Shared sub-components ─────────────────────────────────────────────────────
 function FieldLabel({ children, optional }: { children: React.ReactNode; optional?: boolean }) {
   return (
-    <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1.5">
+    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
       {children}
       {optional && <span className="ml-1 text-slate-400 normal-case font-normal tracking-normal">(optional)</span>}
     </p>
@@ -74,7 +76,7 @@ function SelectField({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full px-3 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-slate-900 transition-colors"
+      className="w-full px-3 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-slate-900 transition-colors"
     >
       {children}
     </select>
@@ -93,12 +95,12 @@ function FormSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden mb-3">
+    <div className="bg-white rounded border border-slate-200 overflow-hidden mb-3">
       <div className="flex items-center gap-2.5 px-4 py-3 border-b border-slate-100 bg-slate-50/60">
-        <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center shrink-0', iconBg)}>
+        <div className={cn('w-7 h-7 rounded flex items-center justify-center shrink-0', iconBg)}>
           {icon}
         </div>
-        <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+        <h3 className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{title}</h3>
       </div>
       <div className="p-4">{children}</div>
     </div>
@@ -109,7 +111,7 @@ function FormSection({
 function LockedField({ label, value }: { label: string; value: string }) {
   return (
     <div className="py-2.5 border-b border-slate-100 last:border-0">
-      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">{label}</p>
       <div className="flex items-center gap-1.5">
         <Lock className="w-3 h-3 text-slate-300 shrink-0" />
         <span className="text-sm text-slate-700 font-medium">{value || '—'}</span>
@@ -182,7 +184,6 @@ export function GuardianEditPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Certifications
   const [certs, setCerts] = useState<CertificateItem[]>([]);
   const [showAddCert, setShowAddCert] = useState(false);
   const [certForm, setCertForm] = useState<AddCertificationPayload>({
@@ -193,7 +194,6 @@ export function GuardianEditPage() {
   const [certError, setCertError] = useState<string | null>(null);
   const [certMsg, setCertMsg] = useState<string | null>(null);
 
-  // Editable fields
   const [fullName,          setFullName]          = useState('');
   const [email,             setEmail]             = useState('');
   const [dateOfBirth,       setDateOfBirth]       = useState('');
@@ -250,7 +250,6 @@ export function GuardianEditPage() {
         ...(certForm.expiryDate && { expiryDate: certForm.expiryDate }),
         ...(documentId          && { documentId }),
       });
-      // Re-fetch to get updated cert list with server-generated IDs
       const updated = await fetchGuardianProfile(id);
       setCerts((updated as GuardianDetail).certifications ?? []);
       setShowAddCert(false);
@@ -279,7 +278,7 @@ export function GuardianEditPage() {
   async function viewDocument(documentId: string) {
     const token = localStorage.getItem('g2sentry_token');
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/documents/${documentId}/content`, {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/admin/verification/documents/${documentId}/content`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) return;
@@ -334,7 +333,7 @@ export function GuardianEditPage() {
   const name = original?.user.fullName ?? original?.user.phoneNumber ?? '';
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-y-auto overscroll-contain bg-slate-50">
+    <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-y-auto overscroll-contain bg-slate-50" style={{ fontFamily: IBM }}>
 
       {/* ── Identity banner ── */}
       <div className="relative bg-[#0D1117] px-6 py-5 shrink-0 overflow-hidden">
@@ -343,18 +342,17 @@ export function GuardianEditPage() {
           style={{ backgroundImage: 'linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px)', backgroundSize: '32px 32px' }}
         />
         <div className="relative z-10 flex items-center gap-4">
-          {/* Avatar */}
-          <div className="w-12 h-12 rounded-xl bg-green-700 flex items-center justify-center text-white text-sm font-bold ring-4 ring-green-500/20 shrink-0 select-none">
+          <div className="w-12 h-12 rounded bg-green-700 flex items-center justify-center text-white text-sm font-bold ring-4 ring-green-500/20 shrink-0 select-none">
             {original ? toInitials(original.user.fullName, original.user.phoneNumber) : '..'}
           </div>
 
-          {/* Context */}
           <div className="flex-1 min-w-0">
             <p className="text-white font-semibold text-sm truncate">{name || 'Loading…'}</p>
             <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400 flex-wrap">
               {original?.guardianCode && (
                 <span className="flex items-center gap-1">
-                  <Shield className="w-3 h-3" /> {original.guardianCode}
+                  <Shield className="w-3 h-3" />
+                  <code className="font-mono">{original.guardianCode}</code>
                 </span>
               )}
               {original?.districtBase && (
@@ -372,19 +370,18 @@ export function GuardianEditPage() {
             </div>
           </div>
 
-          {/* Actions */}
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={() => navigate(`/guardians/${id}`)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-300 border border-white/10 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-300 border border-white/10 rounded hover:bg-white/5 transition-colors cursor-pointer"
             >
               <X className="w-3.5 h-3.5" /> Cancel
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-green-500 hover:bg-green-600 disabled:opacity-50 rounded-lg transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-green-500 hover:bg-green-600 disabled:opacity-50 rounded transition-colors cursor-pointer"
             >
               <Save className="w-3.5 h-3.5" /> {submitting ? 'Saving…' : 'Save changes'}
             </button>
@@ -394,7 +391,7 @@ export function GuardianEditPage() {
 
       {/* ── Error banner ── */}
       {submitError && (
-        <div className="mx-5 mt-4 px-4 py-2.5 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+        <div className="mx-5 mt-4 px-4 py-2.5 bg-red-50 border border-red-200 rounded text-sm text-red-700">
           {submitError}
         </div>
       )}
@@ -538,7 +535,7 @@ export function GuardianEditPage() {
                 {SPECIALIZATIONS.map(({ value, label }) => (
                   <label
                     key={value}
-                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-slate-200 bg-slate-50 cursor-pointer hover:border-green-400 hover:bg-green-50/30 transition-colors"
+                    className="flex items-center gap-2.5 px-3 py-2.5 rounded border border-slate-200 bg-slate-50 cursor-pointer hover:border-green-400 hover:bg-green-50/30 transition-colors"
                   >
                     <div className={cn(
                       'w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-colors',
@@ -562,15 +559,15 @@ export function GuardianEditPage() {
           </FormSection>
 
           {/* Certifications */}
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden mb-3">
+          <div className="bg-white rounded border border-slate-200 overflow-hidden mb-3">
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/60">
               <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-green-100 shrink-0">
+                <div className="w-7 h-7 rounded flex items-center justify-center bg-green-100 shrink-0">
                   <Award className="w-3.5 h-3.5 text-green-600" />
                 </div>
-                <h3 className="text-sm font-semibold text-slate-900">Certifications</h3>
+                <h3 className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Certifications</h3>
                 {certs.length > 0 && (
-                  <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-slate-100 text-slate-500 rounded-md">
+                  <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-slate-100 text-slate-500 rounded">
                     {certs.length}
                   </span>
                 )}
@@ -578,24 +575,23 @@ export function GuardianEditPage() {
               <button
                 type="button"
                 onClick={() => { setShowAddCert((v) => !v); setCertError(null); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 hover:bg-green-100 rounded-lg transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 hover:bg-green-100 rounded transition-colors cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" /> Add certification
               </button>
             </div>
 
-            {/* Cert flash message */}
             {certMsg && (
-              <div className="mx-4 mt-3 px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-xs text-green-700">
+              <div className="mx-4 mt-3 px-3 py-2 bg-green-50 border border-green-200 rounded text-xs text-green-700">
                 {certMsg}
               </div>
             )}
 
             {/* Add cert form */}
             {showAddCert && (
-              <form onSubmit={handleAddCert} className="mx-4 mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3 mb-2">
-                <p className="text-xs font-semibold text-slate-700 uppercase tracking-widest">New certification</p>
-                {certError && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{certError}</p>}
+              <form onSubmit={handleAddCert} className="mx-4 mt-4 p-4 bg-slate-50 rounded border border-slate-200 space-y-3 mb-2">
+                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">New certification</p>
+                {certError && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded">{certError}</p>}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <FieldLabel>Type</FieldLabel>
@@ -603,35 +599,34 @@ export function GuardianEditPage() {
                       required
                       value={certForm.certificationType}
                       onChange={(e) => setCertForm((f) => ({ ...f, certificationType: e.target.value as AddCertificationPayload['certificationType'] }))}
-                      className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500"
+                      className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded bg-white outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500"
                     >
                       {CERT_TYPES.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
                     </select>
                   </div>
                   <div>
                     <FieldLabel>Issuing authority</FieldLabel>
-                    <input required type="text" value={certForm.issuer} onChange={(e) => setCertForm((f) => ({ ...f, issuer: e.target.value }))} placeholder="e.g. Rwanda Red Cross" className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500" />
+                    <input required type="text" value={certForm.issuer} onChange={(e) => setCertForm((f) => ({ ...f, issuer: e.target.value }))} placeholder="e.g. Rwanda Red Cross" className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded bg-white outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500" />
                   </div>
                   <div>
                     <FieldLabel>Issue date</FieldLabel>
-                    <input required type="date" value={certForm.issueDate} onChange={(e) => setCertForm((f) => ({ ...f, issueDate: e.target.value }))} className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500" />
+                    <input required type="date" value={certForm.issueDate} onChange={(e) => setCertForm((f) => ({ ...f, issueDate: e.target.value }))} className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded bg-white outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500" />
                   </div>
                   <div>
                     <FieldLabel optional>Expiry date</FieldLabel>
-                    <input type="date" value={certForm.expiryDate ?? ''} onChange={(e) => setCertForm((f) => ({ ...f, expiryDate: e.target.value }))} className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500" />
+                    <input type="date" value={certForm.expiryDate ?? ''} onChange={(e) => setCertForm((f) => ({ ...f, expiryDate: e.target.value }))} className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded bg-white outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500" />
                   </div>
                 </div>
-                {/* Document */}
                 <div>
                   <FieldLabel optional>Document (PDF / PNG / JPG)</FieldLabel>
                   {certFile ? (
-                    <div className="flex items-center gap-2.5 px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-xs">
+                    <div className="flex items-center gap-2.5 px-3 py-2.5 bg-white border border-slate-200 rounded text-xs">
                       <FileUp className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                       <span className="flex-1 truncate text-slate-700 font-medium">{certFile.name}</span>
                       <button type="button" onClick={() => setCertFile(null)} className="text-slate-400 hover:text-red-500 cursor-pointer"><X className="w-3.5 h-3.5" /></button>
                     </div>
                   ) : (
-                    <label className="flex items-center gap-2.5 px-3 py-2.5 bg-white border border-dashed border-slate-300 rounded-lg text-xs text-slate-500 cursor-pointer hover:border-green-400 hover:bg-green-50/30 transition-colors">
+                    <label className="flex items-center gap-2.5 px-3 py-2.5 bg-white border border-dashed border-slate-300 rounded text-xs text-slate-500 cursor-pointer hover:border-green-400 hover:bg-green-50/30 transition-colors">
                       <FileUp className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                       <span>Click to attach certificate file</span>
                       <input type="file" accept=".pdf,.png,.jpg,.jpeg" className="sr-only" onChange={(e) => { setCertFile(e.target.files?.[0] ?? null); e.target.value = ''; }} />
@@ -639,8 +634,8 @@ export function GuardianEditPage() {
                   )}
                 </div>
                 <div className="flex justify-end gap-2 pt-1">
-                  <button type="button" onClick={() => { setShowAddCert(false); setCertError(null); }} className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer">Cancel</button>
-                  <button type="submit" disabled={certSubmitting} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-green-500 hover:bg-green-600 disabled:opacity-50 rounded-lg cursor-pointer">
+                  <button type="button" onClick={() => { setShowAddCert(false); setCertError(null); }} className="px-3 py-1.5 text-xs border border-slate-200 rounded hover:bg-slate-50 cursor-pointer">Cancel</button>
+                  <button type="submit" disabled={certSubmitting} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-green-500 hover:bg-green-600 disabled:opacity-50 rounded cursor-pointer">
                     {certSubmitting ? 'Saving…' : 'Save certification'}
                   </button>
                 </div>
@@ -656,7 +651,7 @@ export function GuardianEditPage() {
                   <thead>
                     <tr className="border-b border-slate-100">
                       {['Type', 'Issuer', 'Status', 'Issue date', 'Expires', 'Doc', ''].map((h) => (
-                        <th key={h} className="px-4 py-2.5 text-[11px] font-semibold text-slate-400 uppercase tracking-widest">{h}</th>
+                        <th key={h} className="px-4 py-2.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest">{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -673,12 +668,12 @@ export function GuardianEditPage() {
                           </td>
                           <td className="px-4 py-3 text-sm text-slate-600">{c.issuer}</td>
                           <td className="px-4 py-3">
-                            <span className={cn('inline-flex px-2 py-0.5 rounded-md text-[11px] font-semibold', statusCls)}>
+                            <span className={cn('inline-flex px-2 py-0.5 rounded text-[11px] font-semibold', statusCls)}>
                               {c.verificationStatus}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-sm text-slate-500">{new Date(c.issueDate).toLocaleDateString()}</td>
-                          <td className="px-4 py-3 text-sm text-slate-500">{c.expiryDate ? new Date(c.expiryDate).toLocaleDateString() : '—'}</td>
+                          <td className="px-4 py-3 font-mono text-sm text-slate-500">{new Date(c.issueDate).toLocaleDateString()}</td>
+                          <td className="px-4 py-3 font-mono text-sm text-slate-500">{c.expiryDate ? new Date(c.expiryDate).toLocaleDateString() : '—'}</td>
                           <td className="px-4 py-3">
                             {c.documentId ? (
                               <button type="button" onClick={() => viewDocument(c.documentId!)} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 cursor-pointer">
@@ -719,11 +714,10 @@ export function GuardianEditPage() {
         <div className="w-64 shrink-0">
           <div className="sticky top-4 space-y-3">
 
-            {/* Read-only fields */}
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="bg-white rounded border border-slate-200 overflow-hidden">
               <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 bg-slate-50/60">
-                <Lock className="w-4 h-4 text-slate-400" />
-                <h3 className="text-sm font-semibold text-slate-900">Read-only</h3>
+                <Lock className="w-3.5 h-3.5 text-slate-400" />
+                <h3 className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Read-only</h3>
               </div>
               <div className="px-4 py-1">
                 <LockedField
@@ -756,9 +750,8 @@ export function GuardianEditPage() {
               </div>
             </div>
 
-            {/* What changed notice — only shows if form has focus */}
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5">
-              <p className="text-[11px] text-amber-700 font-semibold mb-1">Editing profile</p>
+            <div className="bg-amber-50 border border-amber-200 rounded p-3.5">
+              <p className="text-[9px] font-bold text-amber-700 uppercase tracking-widest mb-1">Editing profile</p>
               <p className="text-[11px] text-amber-600 leading-relaxed">
                 Changes affect identity, deployment, and specializations. Certifications and vetting must be managed from the profile page.
               </p>

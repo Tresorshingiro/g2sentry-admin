@@ -206,10 +206,10 @@ export function LiveMapPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
 
         {/* Map */}
-        <div className="flex-1 relative">
+        <div className="h-[52vh] md:h-auto md:flex-1 relative shrink-0">
           <iframe
             ref={iframeRef}
             srcDoc={html}
@@ -230,23 +230,23 @@ export function LiveMapPage() {
 
           {/* Error */}
           {mapError && (
-            <div className="absolute top-4 left-16 right-4 z-10 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
+            <div className="absolute top-4 left-4 right-4 z-10 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
               Map error · {mapError}
             </div>
           )}
 
           {/* Legend + refresh — top right */}
           <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
-            <div className="flex items-center gap-2 bg-white/90 backdrop-blur-sm border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-600 shadow-sm pointer-events-none">
+            <div className="flex items-center gap-1.5 sm:gap-2 bg-white/90 backdrop-blur-sm border border-slate-200 rounded-lg px-2.5 sm:px-3 py-1.5 text-xs text-slate-600 shadow-sm pointer-events-none">
               {[
                 { color: 'bg-blue-500',   label: 'On duty' },
                 { color: 'bg-green-500',  label: 'Available' },
                 { color: 'bg-gray-400',   label: 'Offline' },
                 { color: 'bg-orange-500', label: 'Client site', square: true },
               ].map(({ color, label, square }) => (
-                <span key={label} className="flex items-center gap-1.5">
-                  <span className={`w-2 h-2 ${square ? 'rounded-sm' : 'rounded-full'} ${color}`} />
-                  {label}
+                <span key={label} className="flex items-center gap-1">
+                  <span className={`w-2 h-2 shrink-0 ${square ? 'rounded-sm' : 'rounded-full'} ${color}`} />
+                  <span className="hidden sm:inline">{label}</span>
                 </span>
               ))}
             </div>
@@ -260,22 +260,22 @@ export function LiveMapPage() {
           </div>
 
           {/* Status counters — bottom left (away from zoom controls) */}
-          <div className="absolute bottom-6 left-4 z-10 flex gap-2 pointer-events-none">
+          <div className="absolute bottom-3 md:bottom-6 left-4 z-10 flex gap-1.5 md:gap-2 pointer-events-none">
             {[
               { count: onDuty.length,    label: 'On duty',   bg: 'bg-blue-600' },
               { count: available.length, label: 'Available', bg: 'bg-green-600' },
               { count: offline.length,   label: 'Offline',   bg: 'bg-gray-500' },
             ].map(({ count, label, bg }) => (
-              <div key={label} className={`${bg} text-white rounded-lg px-3 py-2 shadow-sm`}>
-                <p className="font-bold text-lg leading-none">{count}</p>
-                <p className="text-xs opacity-80">{label}</p>
+              <div key={label} className={`${bg} text-white rounded-lg px-2 md:px-3 py-1.5 md:py-2 shadow-sm`}>
+                <p className="font-bold text-base md:text-lg leading-none">{count}</p>
+                <p className="text-[10px] md:text-xs opacity-80">{label}</p>
               </div>
             ))}
           </div>
         </div>
 
         {/* Sidebar */}
-        <div className="w-72 bg-white border-l flex flex-col">
+        <div className="flex-1 md:flex-none md:w-72 bg-white border-t md:border-t-0 md:border-l flex flex-col overflow-hidden">
 
           {/* Sidebar view toggle */}
           <div className="flex border-b">

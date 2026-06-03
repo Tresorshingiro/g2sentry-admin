@@ -5,6 +5,7 @@ import { AnalyticsPage } from '@/pages/AnalyticsPage';
 import { AssignmentDetailPage } from '@/pages/AssignmentDetailPage';
 import { AssignmentsPage } from '@/pages/AssignmentsPage';
 import { BillingPage } from '@/pages/BillingPage';
+import { InvoiceDetailPage } from '@/pages/InvoiceDetailPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { GuardianDetailPage } from '@/pages/GuardianDetailPage';
 import { GuardianEditPage } from '@/pages/GuardianEditPage';
@@ -20,7 +21,6 @@ import { ClientDetailPage } from '@/pages/ClientDetailPage';
 import { ClientsPage } from '@/pages/ClientsPage';
 import { VerificationsPage } from '@/pages/VerificationsPage';
 import { IncidentsPage } from '@/pages/IncidentsPage';
-import { NotificationsPage } from '@/pages/NotificationsPage';
 
 export default function App() {
   return (
@@ -149,6 +149,17 @@ export default function App() {
       />
 
       <Route
+        path="/billing/:id"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <InvoiceDetailPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
         path="/audit"
         element={
           <ProtectedRoute>
@@ -225,16 +236,6 @@ export default function App() {
         }
       />
 
-      <Route
-        path="/notifications"
-        element={
-          <ProtectedRoute>
-            <AppLayout>
-              <NotificationsPage />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
 
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

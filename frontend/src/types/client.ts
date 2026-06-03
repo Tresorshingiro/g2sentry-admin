@@ -18,4 +18,6 @@ export interface ClientListResponse {
   items: ClientListItem[];
   meta: { page: number; limit: number; total: number; hasMore: boolean };
   statusCounts: Partial<Record<ClientVerificationStatus, number>>;
+  availableDistricts?: string[];
+  availableOrgTypes?: string[];
 }

@@ -1,19 +1,20 @@
 import {
   Briefcase,
-  CheckCircle2,
-  Clock,
-  Download,
+  FileDown,
+  Loader2,
   MapPin,
   Search,
-  Zap,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { exportJobsPDF } from '@/lib/export-jobs-pdf';
 import { cn } from '@/lib/utils';
 import { fetchAssignments } from '@/services/api';
 import type { AssignmentFilter, Job } from '@/types/assignment';
 
-// ── Status config (covers all real backend statuses) ─────────────────────────
+const IBM = "'IBM Plex Sans', system-ui, sans-serif";
+
+// ── Status config ─────────────────────────────────────────────────────────────
 const STATUS_CFG: Record<string, { dot: string; text: string; label: string }> = {
   PENDING:     { dot: 'bg-amber-400',  text: 'text-amber-600',  label: 'Pending dispatch' },
   DISPATCHING: { dot: 'bg-blue-400',   text: 'text-blue-600',   label: 'Dispatching' },
@@ -26,14 +27,14 @@ const STATUS_CFG: Record<string, { dot: string; text: string; label: string }> =
 
 // ── Priority config ───────────────────────────────────────────────────────────
 const PRIORITY_CFG: Record<string, { cls: string; label: string }> = {
-  URGENT:   { cls: 'bg-red-100 text-red-700 ring-1 ring-red-200',     label: 'Urgent' },
+  URGENT:   { cls: 'bg-red-100 text-red-700 ring-1 ring-red-200',        label: 'Urgent' },
   HIGH:     { cls: 'bg-orange-100 text-orange-700 ring-1 ring-orange-200', label: 'High' },
-  STANDARD: { cls: 'bg-blue-50 text-blue-600 ring-1 ring-blue-200',   label: 'Standard' },
-  MEDIUM:   { cls: 'bg-blue-50 text-blue-600 ring-1 ring-blue-200',   label: 'Medium' },
-  LOW:      { cls: 'bg-slate-100 text-slate-500 ring-1 ring-slate-200', label: 'Low' },
+  STANDARD: { cls: 'bg-blue-50 text-blue-600 ring-1 ring-blue-200',      label: 'Standard' },
+  MEDIUM:   { cls: 'bg-blue-50 text-blue-600 ring-1 ring-blue-200',      label: 'Medium' },
+  LOW:      { cls: 'bg-slate-100 text-slate-500 ring-1 ring-slate-200',  label: 'Low' },
 };
 
-// ── Filter tab definitions ────────────────────────────────────────────────────
+// ── Filter tabs ───────────────────────────────────────────────────────────────
 const TABS: { key: AssignmentFilter; label: string }[] = [
   { key: 'ALL',       label: 'All' },
   { key: 'PENDING',   label: 'Pending dispatch' },
@@ -72,13 +73,11 @@ function guardianInitials(fullName: string | null, code: string): string {
 
 // ── Stat card ─────────────────────────────────────────────────────────────────
 function StatCard({
-  icon: Icon, label, value, iconBg, iconColor, onClick, active,
+  label, value, accentColor, onClick, active,
 }: {
-  icon: React.ElementType;
   label: string;
   value: number | null;
-  iconBg: string;
-  iconColor: string;
+  accentColor: string;
   onClick: () => void;
   active: boolean;
 }) {
@@ -87,19 +86,15 @@ function StatCard({
       type="button"
       onClick={onClick}
       className={cn(
-        'flex items-center gap-3.5 px-4 py-3.5 bg-white rounded-xl border text-left transition-all cursor-pointer hover:shadow-sm',
-        active ? 'border-green-500 ring-1 ring-green-500/30' : 'border-slate-200 hover:border-slate-300',
+        'flex flex-col px-4 py-3.5 bg-white border border-slate-200 border-t-[3px] rounded text-left transition-colors cursor-pointer w-full',
+        accentColor,
+        active ? 'ring-2 ring-[#14B87A]/25' : 'hover:bg-slate-50/80',
       )}
     >
-      <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', iconBg)}>
-        <Icon className={cn('w-4 h-4', iconColor)} />
-      </div>
-      <div>
-        <p className="text-xl font-bold text-slate-900 leading-none">
-          {value === null ? <span className="text-slate-300">—</span> : value}
-        </p>
-        <p className="text-xs text-slate-500 mt-0.5">{label}</p>
-      </div>
+      <p className="font-mono text-2xl font-bold text-slate-900 leading-none tabular-nums">
+        {value === null ? <span className="text-slate-300">—</span> : value}
+      </p>
+      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-2">{label}</p>
     </button>
   );
 }
@@ -140,7 +135,7 @@ function GuardianAvatars({ guardians, requested }: { guardians: Job['assignedGua
         </div>
       ) : null}
       <div className="flex flex-col">
-        <span className={cn('text-xs font-semibold tabular-nums leading-tight', isShort ? 'text-red-500' : 'text-slate-700')}>
+        <span className={cn('font-mono text-xs font-semibold tabular-nums leading-tight', isShort ? 'text-red-500' : 'text-slate-700')}>
           {assigned}/{requested}
         </span>
         <div className="w-12 h-1 bg-slate-100 rounded-full overflow-hidden mt-0.5">
@@ -178,14 +173,13 @@ export function AssignmentsPage() {
   const [loading,    setLoading]    = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [search,     setSearch]     = useState('');
+  const [exporting,  setExporting]  = useState(false);
 
-  // Stat counts
   const [statTotal,     setStatTotal]     = useState<number | null>(null);
   const [statPending,   setStatPending]   = useState<number | null>(null);
   const [statActive,    setStatActive]    = useState<number | null>(null);
   const [statCompleted, setStatCompleted] = useState<number | null>(null);
 
-  // Parallel stat fetches on mount
   useEffect(() => {
     void Promise.all([
       fetchAssignments(1, 1),
@@ -200,7 +194,6 @@ export function AssignmentsPage() {
     }).catch(() => {});
   }, []);
 
-  // Main list fetch
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
@@ -221,7 +214,41 @@ export function AssignmentsPage() {
     setPage(1);
   }
 
-  // Client-side search
+  async function handleExportPDF() {
+    setExporting(true);
+    try {
+      const status = filterToStatus(filter);
+      const BATCH  = 100;
+      const first  = await fetchAssignments(1, BATCH, status);
+      const totalCount = first.meta.total;
+      const totalPages = Math.ceil(totalCount / BATCH);
+      let allItems = [...first.items];
+      if (totalPages > 1) {
+        const rest = await Promise.all(
+          Array.from({ length: totalPages - 1 }, (_, i) =>
+            fetchAssignments(i + 2, BATCH, status),
+          ),
+        );
+        for (const res of rest) allItems = [...allItems, ...res.items];
+      }
+      const filterLabel = filter === 'ALL'       ? 'All jobs'
+        : filter === 'PENDING'   ? 'Pending dispatch'
+        : filter === 'ACTIVE'    ? 'On duty'
+        : filter === 'COMPLETED' ? 'Completed'
+        : filter === 'CANCELED'  ? 'Cancelled'
+        : filter;
+      exportJobsPDF(
+        allItems,
+        { total: statTotal, pending: statPending, active: statActive, completed: statCompleted },
+        filterLabel,
+      );
+    } catch {
+      // silently fail
+    } finally {
+      setExporting(false);
+    }
+  }
+
   const visible = search.trim()
     ? items.filter((j) => {
         const q = search.toLowerCase();
@@ -238,23 +265,22 @@ export function AssignmentsPage() {
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto overscroll-contain bg-slate-50">
+    <div className="flex flex-col h-full overflow-y-auto overscroll-contain bg-slate-50" style={{ fontFamily: IBM }}>
       <div className="p-4 sm:p-5 space-y-4">
 
         {/* ── Stat cards ── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatCard icon={Briefcase}   label="Total jobs"        value={statTotal}     iconBg="bg-slate-100"  iconColor="text-slate-600"  onClick={() => handleFilterChange('ALL')}       active={filter === 'ALL'} />
-          <StatCard icon={Clock}       label="Pending dispatch"  value={statPending}   iconBg="bg-amber-100"  iconColor="text-amber-600"  onClick={() => handleFilterChange('PENDING')}   active={filter === 'PENDING'} />
-          <StatCard icon={Zap}         label="On duty now"       value={statActive}    iconBg="bg-green-100"  iconColor="text-green-600"  onClick={() => handleFilterChange('ACTIVE')}    active={filter === 'ACTIVE'} />
-          <StatCard icon={CheckCircle2} label="Completed"        value={statCompleted} iconBg="bg-blue-100"   iconColor="text-blue-500"   onClick={() => handleFilterChange('COMPLETED')} active={filter === 'COMPLETED'} />
+          <StatCard label="Total jobs"        value={statTotal}     accentColor="border-t-slate-400"  onClick={() => handleFilterChange('ALL')}       active={filter === 'ALL'} />
+          <StatCard label="Pending dispatch"  value={statPending}   accentColor="border-t-amber-400"  onClick={() => handleFilterChange('PENDING')}   active={filter === 'PENDING'} />
+          <StatCard label="On duty now"       value={statActive}    accentColor="border-t-[#14B87A]"  onClick={() => handleFilterChange('ACTIVE')}    active={filter === 'ACTIVE'} />
+          <StatCard label="Completed"         value={statCompleted} accentColor="border-t-blue-500"   onClick={() => handleFilterChange('COMPLETED')} active={filter === 'COMPLETED'} />
         </div>
 
         {/* ── Table card ── */}
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="bg-white rounded border border-slate-200 overflow-hidden">
 
           {/* Controls row */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 border-b border-slate-100">
-            {/* Filter tabs */}
             <div className="flex items-center overflow-x-auto">
               {TABS.map(({ key, label }) => (
                 <button
@@ -273,7 +299,6 @@ export function AssignmentsPage() {
               ))}
             </div>
 
-            {/* Right controls */}
             <div className="flex items-center gap-2">
               <div className="relative flex-1 sm:flex-none">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
@@ -282,28 +307,127 @@ export function AssignmentsPage() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search jobs, clients…"
-                  className="w-full sm:w-48 pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20 transition-colors"
+                  className="w-full sm:w-48 pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20 transition-colors"
                 />
               </div>
-              <button type="button" className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer shrink-0">
-                <Download className="w-3.5 h-3.5" /> Export
+              <button
+                type="button"
+                onClick={handleExportPDF}
+                disabled={exporting}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-600 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 transition-colors cursor-pointer shrink-0"
+              >
+                {exporting
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : <FileDown className="w-3.5 h-3.5" />}
+                {exporting ? 'Generating…' : 'Export PDF'}
               </button>
             </div>
           </div>
 
           {fetchError && (
-            <div className="mx-4 mt-3 px-3 py-2.5 bg-red-50 border border-red-100 rounded-lg text-xs text-red-600">
+            <div className="mx-4 mt-3 px-3 py-2.5 bg-red-50 border border-red-100 rounded text-xs text-red-600">
               {fetchError}
             </div>
           )}
 
-          {/* Table */}
-          <div className="overflow-x-auto">
+          {/* ── Mobile card list ── */}
+          <div className="md:hidden divide-y divide-slate-50">
+            {loading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="px-4 py-3.5 space-y-2">
+                  <div className="flex justify-between">
+                    <div className="h-3.5 bg-slate-100 rounded animate-pulse w-24" />
+                    <div className="h-3.5 bg-slate-100 rounded animate-pulse w-16" />
+                  </div>
+                  <div className="h-4 bg-slate-100 rounded animate-pulse w-3/5" />
+                  <div className="h-3 bg-slate-100 rounded animate-pulse w-2/5" />
+                  <div className="flex justify-between mt-2">
+                    <div className="h-3 bg-slate-100 rounded animate-pulse w-1/2" />
+                    <div className="h-6 bg-slate-100 rounded animate-pulse w-12" />
+                  </div>
+                </div>
+              ))
+            ) : visible.length === 0 ? (
+              <div className="px-4 py-16 text-center">
+                <Briefcase className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                <p className="text-sm text-slate-400">
+                  {search ? 'No jobs match your search' : 'No jobs found'}
+                </p>
+              </div>
+            ) : (
+              visible.map((job) => {
+                const status    = STATUS_CFG[job.status]    ?? { dot: 'bg-slate-400', text: 'text-slate-500', label: job.status };
+                const priority  = PRIORITY_CFG[job.priority] ?? { cls: 'bg-slate-100 text-slate-500', label: job.priority };
+                const isToday   = relativeDate(job.scheduledStart) === 'Today';
+                const dateLabel = relativeDate(job.scheduledStart);
+
+                return (
+                  <div
+                    key={job.id}
+                    onClick={() => navigate(`/assignments/${job.id}`)}
+                    className="px-4 py-3.5 hover:bg-slate-50/80 cursor-pointer active:bg-slate-100 transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <code className={cn(
+                        'text-xs font-mono font-semibold',
+                        job.status === 'IN_PROGRESS' ? 'text-green-600' : 'text-slate-700',
+                      )}>
+                        {job.referenceNumber}
+                      </code>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <div className={cn('w-1.5 h-1.5 rounded-full', status.dot)} />
+                        <span className={cn('text-[11px] font-medium', status.text)}>{status.label}</span>
+                      </div>
+                    </div>
+
+                    <p className="text-sm font-semibold text-slate-900 truncate mt-1 leading-tight">
+                      {job.organization?.legalName ?? '—'}
+                    </p>
+
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                      <span className="text-xs text-slate-500 truncate">
+                        {job.location?.name ?? '—'}
+                        {job.location?.district ? ` · ${job.location.district}` : ''}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      <span className={cn('font-mono text-xs font-semibold', isToday ? 'text-green-600' : 'text-slate-700')}>
+                        {dateLabel} · {fmtTime(job.scheduledStart)}
+                        {job.scheduledEnd ? ` – ${fmtTime(job.scheduledEnd)}` : ''}
+                      </span>
+                      <span className={cn('inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold', priority.cls)}>
+                        {priority.label}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between mt-2" onClick={(e) => e.stopPropagation()}>
+                      <GuardianAvatars
+                        guardians={job.assignedGuardians ?? []}
+                        requested={job.requestedGuardianCount}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/assignments/${job.id}`)}
+                        className="px-2.5 py-1 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded transition-colors cursor-pointer"
+                      >
+                        View
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* ── Desktop table ── */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-slate-100">
                   {['Job ref', 'Client & location', 'Schedule', 'Priority', 'Staffing', 'Status', 'Actions'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                    <th key={h} className="px-4 py-3 text-[9px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">
                       {h}
                     </th>
                   ))}
@@ -315,7 +439,7 @@ export function AssignmentsPage() {
                     <tr key={i}>
                       {[140, 200, 100, 80, 120, 90, 80].map((w, j) => (
                         <td key={j} className="px-4 py-3.5">
-                          <div className="h-4 bg-slate-100 rounded animate-pulse" style={{ width: `${w * 0.6 + Math.random() * w * 0.4}px` }} />
+                          <div className="h-4 bg-slate-100 rounded animate-pulse" style={{ width: w }} />
                         </td>
                       ))}
                     </tr>
@@ -331,7 +455,7 @@ export function AssignmentsPage() {
                   </tr>
                 ) : (
                   visible.map((job) => {
-                    const status   = STATUS_CFG[job.status]   ?? { dot: 'bg-slate-400', text: 'text-slate-500', label: job.status };
+                    const status   = STATUS_CFG[job.status]    ?? { dot: 'bg-slate-400', text: 'text-slate-500', label: job.status };
                     const priority = PRIORITY_CFG[job.priority] ?? { cls: 'bg-slate-100 text-slate-500', label: job.priority };
                     const isToday  = relativeDate(job.scheduledStart) === 'Today';
                     const dateLabel = relativeDate(job.scheduledStart);
@@ -340,77 +464,45 @@ export function AssignmentsPage() {
                       <tr
                         key={job.id}
                         onClick={() => navigate(`/assignments/${job.id}`)}
-                        className="group hover:bg-slate-50/80 cursor-pointer transition-colors"
+                        className="hover:bg-slate-50/80 cursor-pointer transition-colors"
                       >
-                        {/* Job ref */}
                         <td className="px-4 py-3.5">
-                          <code className={cn(
-                            'text-xs font-mono font-semibold',
-                            job.status === 'IN_PROGRESS' ? 'text-green-600' : 'text-slate-700',
-                          )}>
+                          <code className={cn('text-xs font-mono font-semibold', job.status === 'IN_PROGRESS' ? 'text-green-600' : 'text-slate-700')}>
                             {job.referenceNumber}
                           </code>
                         </td>
-
-                        {/* Client & location */}
                         <td className="px-4 py-3.5 max-w-[220px]">
-                          <p className="text-sm font-semibold text-slate-900 truncate leading-tight">
-                            {job.organization?.legalName ?? '—'}
-                          </p>
+                          <p className="text-sm font-semibold text-slate-900 truncate leading-tight">{job.organization?.legalName ?? '—'}</p>
                           <div className="flex items-center gap-1 mt-0.5">
                             <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
                             <span className="text-xs text-slate-500 truncate">
-                              {job.location?.name ?? '—'}
-                              {job.location?.district ? ` · ${job.location.district}` : ''}
+                              {job.location?.name ?? '—'}{job.location?.district ? ` · ${job.location.district}` : ''}
                             </span>
                           </div>
                         </td>
-
-                        {/* Schedule */}
                         <td className="px-4 py-3.5 whitespace-nowrap">
-                          <p className={cn(
-                            'text-xs font-semibold leading-tight',
-                            isToday ? 'text-green-600' : 'text-slate-800',
-                          )}>
-                            {dateLabel}
-                          </p>
-                          <p className="text-[11px] text-slate-400 mt-0.5">
-                            {fmtTime(job.scheduledStart)}
-                            {job.scheduledEnd ? ` – ${fmtTime(job.scheduledEnd)}` : ''}
+                          <p className={cn('font-mono text-xs font-semibold leading-tight', isToday ? 'text-green-600' : 'text-slate-800')}>{dateLabel}</p>
+                          <p className="font-mono text-[11px] text-slate-400 mt-0.5">
+                            {fmtTime(job.scheduledStart)}{job.scheduledEnd ? ` – ${fmtTime(job.scheduledEnd)}` : ''}
                           </p>
                         </td>
-
-                        {/* Priority */}
                         <td className="px-4 py-3.5">
-                          <span className={cn('inline-flex px-2 py-0.5 rounded-md text-[11px] font-semibold', priority.cls)}>
-                            {priority.label}
-                          </span>
+                          <span className={cn('inline-flex px-2 py-0.5 rounded text-[11px] font-semibold', priority.cls)}>{priority.label}</span>
                         </td>
-
-                        {/* Staffing */}
                         <td className="px-4 py-3.5">
-                          <GuardianAvatars
-                            guardians={job.assignedGuardians ?? []}
-                            requested={job.requestedGuardianCount}
-                          />
+                          <GuardianAvatars guardians={job.assignedGuardians ?? []} requested={job.requestedGuardianCount} />
                         </td>
-
-                        {/* Status */}
                         <td className="px-4 py-3.5 whitespace-nowrap">
                           <div className="flex items-center gap-1.5">
                             <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', status.dot)} />
-                            <span className={cn('text-xs font-medium', status.text)}>
-                              {status.label}
-                            </span>
+                            <span className={cn('text-xs font-medium', status.text)}>{status.label}</span>
                           </div>
                         </td>
-
-                        {/* Actions */}
                         <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
                           <button
                             type="button"
                             onClick={() => navigate(`/assignments/${job.id}`)}
-                            className="px-2.5 py-1 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors cursor-pointer"
+                            className="px-2.5 py-1 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded transition-colors cursor-pointer"
                           >
                             View
                           </button>
@@ -426,24 +518,21 @@ export function AssignmentsPage() {
           {/* Pagination */}
           {!loading && totalPages > 1 && (
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 border-t border-slate-100">
-              <span className="text-xs text-slate-500">
-                Showing {(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)} of {total} jobs
+              <span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest">
+                {(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)} of {total} jobs
               </span>
               <div className="flex items-center gap-1">
-                {/* Prev */}
                 <button
                   type="button"
                   disabled={page === 1}
                   onClick={() => setPage((p) => p - 1)}
-                  className="w-7 h-7 flex items-center justify-center rounded-md border border-slate-200 text-slate-500 disabled:opacity-30 hover:bg-slate-50 transition-colors cursor-pointer text-sm"
+                  className="w-7 h-7 flex items-center justify-center rounded border border-slate-200 text-slate-500 disabled:opacity-30 hover:bg-slate-50 transition-colors cursor-pointer text-sm"
                 >
                   ‹
                 </button>
-
-                {/* Page numbers with ellipsis */}
                 {getPageNumbers(page, totalPages).map((n, i) =>
                   n === '…' ? (
-                    <span key={`ellipsis-${i}`} className="w-7 h-7 flex items-center justify-center text-xs text-slate-400">
+                    <span key={`ellipsis-${i}`} className="w-7 h-7 flex items-center justify-center font-mono text-xs text-slate-400">
                       …
                     </span>
                   ) : (
@@ -452,7 +541,7 @@ export function AssignmentsPage() {
                       type="button"
                       onClick={() => setPage(n)}
                       className={cn(
-                        'w-7 h-7 flex items-center justify-center rounded-md text-xs font-medium border transition-colors cursor-pointer',
+                        'w-7 h-7 flex items-center justify-center rounded font-mono text-xs font-medium border transition-colors cursor-pointer',
                         page === n
                           ? 'bg-slate-900 text-white border-slate-900'
                           : 'border-slate-200 text-slate-600 hover:bg-slate-50',
@@ -462,13 +551,11 @@ export function AssignmentsPage() {
                     </button>
                   ),
                 )}
-
-                {/* Next */}
                 <button
                   type="button"
                   disabled={page >= totalPages}
                   onClick={() => setPage((p) => p + 1)}
-                  className="w-7 h-7 flex items-center justify-center rounded-md border border-slate-200 text-slate-500 disabled:opacity-30 hover:bg-slate-50 transition-colors cursor-pointer text-sm"
+                  className="w-7 h-7 flex items-center justify-center rounded border border-slate-200 text-slate-500 disabled:opacity-30 hover:bg-slate-50 transition-colors cursor-pointer text-sm"
                 >
                   ›
                 </button>

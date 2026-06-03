@@ -20,6 +20,7 @@ export interface DistrictStat {
 export interface WeeklyJobStat {
   day: string;
   count: number;
+  completedCount: number;
   isToday: boolean;
 }
 

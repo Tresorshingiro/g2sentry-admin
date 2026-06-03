@@ -7,16 +7,19 @@ export type InvoiceStatus =
   | 'VOID';
 export type InvoiceFilter = 'ALL' | InvoiceStatus;
 
+/** Shape returned by GET /api/v1/admin/invoices items */
 export interface RawInvoice {
   id: string;
-  invoiceNumber: string;
   status: InvoiceStatus;
-  organization: { id: string; legalName: string } | null;
-  totalAmount: string;
-  dueDate: string | null;
+  subtotal: string;
+  taxAmount: string;
+  total: string;
+  currency: string;
+  dueAt: string | null;
   issuedAt: string | null;
   createdAt: string;
-  items?: { description: string }[];
+  organization: { id: string; legalName: string } | null;
+  job: { id: string; referenceNumber: string; jobType: string } | null;
 }
 
 export interface InvoiceListResponse {
@@ -47,6 +50,55 @@ export interface EbmComplianceInfo {
   ebmReceiptsSent: number;
   vatCollected: number;
   nextFilingDate: string;
+}
+
+// ─── Invoice detail (GET /invoices/:id) ──────────────────────────────────────
+
+export interface InvoicePayment {
+  id: string;
+  provider: string;
+  amount: string;
+  currency: string;
+  status: string;
+  paidAt: string | null;
+  externalTxnId: string | null;
+  createdAt: string;
+}
+
+export interface InvoiceEbmReceipt {
+  id: string;
+  receiptNumber: string;
+  issuedAt: string;
+}
+
+export interface InvoiceJobDetail {
+  id: string;
+  referenceNumber: string;
+  jobType: string;
+  priority: string;
+  status: string;
+  requestedGuardianCount: number;
+  scheduledStart: string;
+  scheduledEnd: string;
+  notes: string | null;
+  specialInstructions: string | null;
+}
+
+export interface InvoiceDetail {
+  id: string;
+  organizationId: string;
+  jobId: string;
+  subtotal: string;
+  taxAmount: string;
+  total: string;
+  currency: string;
+  status: InvoiceStatus;
+  issuedAt: string | null;
+  dueAt: string | null;
+  createdAt: string;
+  payments: InvoicePayment[];
+  ebmReceipt: InvoiceEbmReceipt | null;
+  job: InvoiceJobDetail | null;
 }
 
 export interface InvoiceRow {
