@@ -160,7 +160,7 @@ export function LiveMapPage() {
   }, []);
 
   useEffect(() => { void loadData(); }, [loadData]);
-  const { countdown, refresh } = useAutoRefresh(30, loadData);
+  const { countdown, refresh } = useAutoRefresh(10, loadData);
 
   // Push data into iframe whenever map is ready or data changes
   useEffect(() => {
