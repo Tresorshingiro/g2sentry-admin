@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Copy,
   CreditCard,
   Eye,
   FilePlus,
@@ -22,6 +23,7 @@ import {
   fetchBillingOverview,
   fetchInvoices,
   fetchMonthlyChartData,
+  fetchPayments,
   issueInvoice,
   voidInvoice,
   type MonthlyChartPoint,
@@ -31,6 +33,7 @@ import type {
   EbmComplianceInfo,
   InvoiceFilter,
   InvoiceRow,
+  Payment,
   RawInvoice,
 } from '@/types/billing';
 
@@ -41,12 +44,15 @@ import type {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TABS: { key: InvoiceFilter; label: string }[] = [
+type BillingTab = InvoiceFilter | 'PAYMENTS';
+
+const TABS: { key: BillingTab; label: string }[] = [
   { key: 'ALL', label: 'All' },
   { key: 'ISSUED', label: 'Issued' },
   { key: 'PAID', label: 'Paid' },
   { key: 'OVERDUE', label: 'Overdue' },
   { key: 'DRAFT', label: 'Draft' },
+  { key: 'PAYMENTS', label: 'Payments' },
 ];
 
 const AVATAR_CLASSES = [
@@ -74,6 +80,21 @@ const STATUS_BADGE: Record<string, { cls: string; label: string }> = {
   PARTIALLY_PAID:{ cls: 'bg-amber-50 text-amber-700 border-amber-200',    label: 'PARTIAL' },
   OVERDUE:       { cls: 'bg-red-50 text-red-700 border-red-200',          label: 'OVERDUE' },
   VOID:          { cls: 'bg-slate-100 text-slate-400 border-slate-200',   label: 'VOID' },
+  DISPUTED:      { cls: 'bg-orange-50 text-orange-700 border-orange-200', label: 'DISPUTED' },
+};
+
+const PAYMENT_STATUS_BADGE: Record<string, { cls: string }> = {
+  PENDING:   { cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  COMPLETED: { cls: 'bg-emerald-50 text-emerald-700 border-emerald-300' },
+  FAILED:    { cls: 'bg-red-50 text-red-700 border-red-200' },
+  REFUNDED:  { cls: 'bg-slate-100 text-slate-500 border-slate-200' },
+};
+
+const PAYMENT_PROVIDER_LABELS: Record<string, string> = {
+  MOMO_MTN: 'MTN Mobile Money',
+  AIRTEL_MONEY: 'Airtel Money',
+  BANK_TRANSFER: 'Bank Transfer',
+  CASH: 'Cash',
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -150,16 +171,19 @@ export function BillingPage() {
   const [ebm, setEbm] = useState<EbmComplianceInfo | null>(null);
   const [chartData, setChartData] = useState<MonthlyChartPoint[]>([]);
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [total, setTotal] = useState(0);
-  const [activeTab, setActiveTab] = useState<InvoiceFilter>('ALL');
+  const [activeTab, setActiveTab] = useState<BillingTab>('ALL');
   const [page, setPage] = useState(1);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [copiedTxn, setCopiedTxn] = useState<string | null>(null);
 
   const currentMonthLabel = new Date().toLocaleDateString('en', { month: 'long', year: 'numeric' });
   const totalPages = Math.max(1, Math.ceil(total / 20));
   const ebmLastSync = ebm
     ? new Date(ebm.lastSync).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
     : '—';
+  const isPaymentsTab = activeTab === 'PAYMENTS';
 
   useEffect(() => {
     void fetchBillingOverview()
@@ -170,17 +194,35 @@ export function BillingPage() {
 
   useEffect(() => {
     setFetchError(null);
-    fetchInvoices(page, 20, activeTab === 'ALL' ? undefined : activeTab)
-      .then((res) => {
-        setInvoices(res.items.map(toDisplay));
-        setTotal(res.meta.total);
-      })
-      .catch((err: unknown) => {
-        setFetchError(err instanceof Error ? err.message : 'Failed to load invoices');
-      });
+    if (activeTab === 'PAYMENTS') {
+      fetchPayments(page, 20)
+        .then((res) => {
+          setPayments(res.items);
+          setTotal(res.meta.total);
+        })
+        .catch((err: unknown) => {
+          setFetchError(err instanceof Error ? err.message : 'Failed to load payments');
+        });
+    } else {
+      fetchInvoices(page, 20, activeTab === 'ALL' ? undefined : activeTab)
+        .then((res) => {
+          setInvoices(res.items.map(toDisplay));
+          setTotal(res.meta.total);
+        })
+        .catch((err: unknown) => {
+          setFetchError(err instanceof Error ? err.message : 'Failed to load invoices');
+        });
+    }
   }, [activeTab, page]);
 
-  function handleTabChange(tab: InvoiceFilter) { setActiveTab(tab); setPage(1); }
+  function handleTabChange(tab: BillingTab) { setActiveTab(tab); setPage(1); }
+
+  function handleCopyTxn(txnId: string) {
+    void navigator.clipboard.writeText(txnId).then(() => {
+      setCopiedTxn(txnId);
+      setTimeout(() => setCopiedTxn(null), 1500);
+    });
+  }
 
   async function handleIssue(id: string) {
     await issueInvoice(id).catch(() => null);
@@ -331,7 +373,7 @@ export function BillingPage() {
         </div>
 
         {/* ── Chart + Tax compliance ──────────────────────────────────────────── */}
-        <div className="grid grid-cols-3 gap-2.5">
+        {!isPaymentsTab && <div className="grid grid-cols-3 gap-2.5">
 
           {/* Revenue chart */}
           <div className="col-span-2 bg-white border border-slate-200 rounded overflow-hidden">
@@ -400,9 +442,9 @@ export function BillingPage() {
               </div>
             )}
           </div>
-        </div>
+        </div>}
 
-        {/* ── Invoice table ───────────────────────────────────────────────────── */}
+        {/* ── Invoice / Payments table ────────────────────────────────────────── */}
         <div className="bg-white border border-slate-200 rounded overflow-hidden">
 
           {/* Tabs + search */}
@@ -439,109 +481,163 @@ export function BillingPage() {
 
           {/* Table */}
           <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  {['Invoice #', 'Client', 'Service', 'Amount', 'Status', 'Due', 'Actions'].map((h) => (
-                    <th
-                      key={h}
-                      className="px-4 py-2.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap"
+            {isPaymentsTab ? (
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    {['Date', 'Organization', 'Invoice', 'Provider', 'Amount', 'Status', 'Txn ID'].map((h) => (
+                      <th key={h} className="px-4 py-2.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.length === 0 && !fetchError && (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-10 text-center text-[11px] text-slate-400">No payments found</td>
+                    </tr>
+                  )}
+                  {payments.map((p) => {
+                    const dateStr = p.paidAt ?? p.createdAt;
+                    const badge = PAYMENT_STATUS_BADGE[p.status] ?? { cls: 'bg-slate-100 text-slate-500 border-slate-200' };
+                    return (
+                      <tr key={p.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors">
+                        <td className="px-4 py-3 font-mono text-[11px] text-slate-500">
+                          {new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-700">{p.organizationName ?? '—'}</td>
+                        <td className="px-4 py-3">
+                          <span className="font-mono text-[11px] text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded-sm">
+                            {p.invoiceId ? p.invoiceId.slice(0, 8).toUpperCase() : '—'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-[11px] text-slate-600">
+                          {PAYMENT_PROVIDER_LABELS[p.provider] ?? p.provider}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="font-mono text-sm font-bold text-slate-900 tabular-nums">
+                            {formatRWF(Number(p.amount))}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold tracking-widest border ${badge.cls}`}>
+                            {p.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          {p.externalTxnId ? (
+                            <button
+                              type="button"
+                              title="Copy transaction ID"
+                              aria-label="Copy transaction ID"
+                              onClick={() => handleCopyTxn(p.externalTxnId!)}
+                              className="flex items-center gap-1 font-mono text-[11px] text-slate-400 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded-sm hover:bg-slate-200 transition-colors cursor-pointer"
+                            >
+                              {copiedTxn === p.externalTxnId ? 'Copied!' : p.externalTxnId.slice(0, 12)}
+                              <Copy className="w-2.5 h-2.5 shrink-0" />
+                            </button>
+                          ) : (
+                            <span className="font-mono text-[11px] text-slate-300">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            ) : (
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    {['Invoice #', 'Client', 'Service', 'Amount', 'Status', 'Due', 'Actions'].map((h) => (
+                      <th
+                        key={h}
+                        className="px-4 py-2.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap"
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoices.length === 0 && !fetchError && (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-10 text-center text-[11px] text-slate-400">
+                        No invoices found
+                      </td>
+                    </tr>
+                  )}
+                  {invoices.map((inv) => (
+                    <tr
+                      key={inv.id}
+                      className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors"
                     >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {invoices.length === 0 && !fetchError && (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-[11px] text-slate-400">
-                      No invoices found
-                    </td>
-                  </tr>
-                )}
-                {invoices.map((inv) => (
-                  <tr
-                    key={inv.id}
-                    className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors"
-                  >
-                    {/* Invoice # */}
-                    <td className="px-4 py-3">
-                      <span className="font-mono text-[11px] text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded-sm">
-                        {inv.number}
-                      </span>
-                    </td>
-
-                    {/* Client */}
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-6 h-6 rounded flex items-center justify-center text-[8px] font-bold shrink-0 ${inv.clientAvatarClass}`}>
-                          {inv.clientInitials}
+                      <td className="px-4 py-3">
+                        <span className="font-mono text-[11px] text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded-sm">
+                          {inv.number}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-6 h-6 rounded flex items-center justify-center text-[8px] font-bold shrink-0 ${inv.clientAvatarClass}`}>
+                            {inv.clientInitials}
+                          </div>
+                          <span className="text-xs font-semibold text-slate-800">{inv.client}</span>
                         </div>
-                        <span className="text-xs font-semibold text-slate-800">{inv.client}</span>
-                      </div>
-                    </td>
-
-                    {/* Description */}
-                    <td className="px-4 py-3 text-[11px] text-slate-500">{inv.description}</td>
-
-                    {/* Amount */}
-                    <td className="px-4 py-3">
-                      <span className="font-mono text-sm font-bold text-slate-900 tabular-nums">
-                        {formatRWF(inv.amount)}
-                      </span>
-                    </td>
-
-                    {/* Status */}
-                    <td className="px-4 py-3">
-                      <SharpBadge status={inv.status} />
-                    </td>
-
-                    {/* Due date */}
-                    <td className={`px-4 py-3 font-mono text-[11px] ${inv.dueDateClass}`}>
-                      {inv.dueDate}
-                    </td>
-
-                    {/* Actions */}
-                    <td className="px-4 py-3">
-                      <div className="flex gap-1">
-                        <button
-                          type="button"
-                          title="View invoice"
-                          aria-label="View invoice"
-                          onClick={() => navigate(`/billing/${inv.id}`)}
-                          className="w-7 h-7 rounded border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 hover:border-slate-300 transition-colors cursor-pointer"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
-                        {inv.status === 'DRAFT' && (
+                      </td>
+                      <td className="px-4 py-3 text-[11px] text-slate-500">{inv.description}</td>
+                      <td className="px-4 py-3">
+                        <span className="font-mono text-sm font-bold text-slate-900 tabular-nums">
+                          {formatRWF(inv.amount)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <SharpBadge status={inv.status} />
+                      </td>
+                      <td className={`px-4 py-3 font-mono text-[11px] ${inv.dueDateClass}`}>
+                        {inv.dueDate}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-1">
                           <button
                             type="button"
-                            title="Issue invoice"
-                            aria-label="Issue invoice"
-                            onClick={() => void handleIssue(inv.id)}
-                            className="w-7 h-7 rounded border border-emerald-200 flex items-center justify-center text-emerald-600 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-300 transition-colors cursor-pointer"
+                            title="View invoice"
+                            aria-label="View invoice"
+                            onClick={() => navigate(`/billing/${inv.id}`)}
+                            className="w-7 h-7 rounded border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 hover:border-slate-300 transition-colors cursor-pointer"
                           >
-                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <Eye className="w-3.5 h-3.5" />
                           </button>
-                        )}
-                        {inv.status !== 'PAID' && inv.status !== 'VOID' && (
-                          <button
-                            type="button"
-                            title="Void invoice"
-                            aria-label="Void invoice"
-                            onClick={() => void handleVoid(inv.id)}
-                            className="w-7 h-7 rounded border border-red-100 flex items-center justify-center text-red-400 bg-red-50 hover:bg-red-100 hover:border-red-300 hover:text-red-600 transition-colors cursor-pointer"
-                          >
-                            <XCircle className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                          {inv.status === 'DRAFT' && (
+                            <button
+                              type="button"
+                              title="Issue invoice"
+                              aria-label="Issue invoice"
+                              onClick={() => void handleIssue(inv.id)}
+                              className="w-7 h-7 rounded border border-emerald-200 flex items-center justify-center text-emerald-600 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-300 transition-colors cursor-pointer"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {inv.status !== 'PAID' && inv.status !== 'VOID' && inv.status !== 'DISPUTED' && (
+                            <button
+                              type="button"
+                              title="Void invoice"
+                              aria-label="Void invoice"
+                              onClick={() => void handleVoid(inv.id)}
+                              className="w-7 h-7 rounded border border-red-100 flex items-center justify-center text-red-400 bg-red-50 hover:bg-red-100 hover:border-red-300 hover:text-red-600 transition-colors cursor-pointer"
+                            >
+                              <XCircle className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
 
           {/* Pagination */}

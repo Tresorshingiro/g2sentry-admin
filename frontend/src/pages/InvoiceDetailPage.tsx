@@ -1,19 +1,22 @@
 import {
+  AlertTriangle,
   ArrowLeft,
   BadgeCheck,
   CheckCircle2,
   CreditCard,
   FileText,
+  Loader2,
   Receipt,
   Shield,
+  X,
   XCircle,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { InvoiceStatusBadge } from '@/components/shared/InvoiceStatusBadge';
 import { formatRWF } from '@/lib/utils';
-import { fetchInvoiceById, fetchOrgById, issueInvoice, voidInvoice } from '@/services/api';
-import type { InvoiceDetail, InvoicePayment } from '@/types/billing';
+import { fetchInvoiceById, fetchOrgById, issueInvoice, resolveDispute, voidInvoice } from '@/services/api';
+import type { InvoiceDetail, InvoicePayment, ResolveDisputePayload } from '@/types/billing';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -81,6 +84,148 @@ function SectionCard({ title, icon, children }: { title: string; icon: React.Rea
   );
 }
 
+// ─── Dispute resolve modal ────────────────────────────────────────────────────
+
+function ResolveDisputeModal({
+  invoiceId,
+  onClose,
+  onResolved,
+}: {
+  invoiceId: string;
+  onClose: () => void;
+  onResolved: () => void;
+}) {
+  const [action, setAction] = useState<'CLEAR' | 'VOID'>('CLEAR');
+  const [note, setNote] = useState('');
+  const [voidReason, setVoidReason] = useState('');
+  const [replacementId, setReplacementId] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (action === 'VOID' && !voidReason.trim()) {
+      setError('Void reason is required when voiding an invoice');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const payload: ResolveDisputePayload = {
+        action,
+        note: note || undefined,
+        voidReason: action === 'VOID' ? voidReason : undefined,
+        replacementInvoiceId: action === 'VOID' && replacementId ? replacementId : undefined,
+      };
+      await resolveDispute(invoiceId, payload);
+      onResolved();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to resolve dispute');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const INPUT_CLS = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-[#14B87A] focus:border-[#14B87A] transition-colors';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div
+        className="relative w-full max-w-md bg-white rounded-xl shadow-2xl overflow-hidden"
+        style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif" }}
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <h2 className="text-sm font-bold text-slate-900">Resolve Dispute</h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <form onSubmit={(e) => void handleSubmit(e)} className="px-5 py-4 space-y-4">
+          {error && (
+            <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-[11px] text-red-700">{error}</div>
+          )}
+
+          <div>
+            <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-2">Action</label>
+            <div className="flex gap-4">
+              {(['CLEAR', 'VOID'] as const).map((a) => (
+                <label key={a} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="action"
+                    value={a}
+                    checked={action === a}
+                    onChange={() => setAction(a)}
+                    className="accent-[#14B87A]"
+                  />
+                  <span className="text-xs text-slate-700">{a === 'CLEAR' ? 'Clear (restore to previous status)' : 'Void'}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1">Note (optional)</label>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              maxLength={500}
+              rows={3}
+              className={INPUT_CLS}
+              placeholder="Add a note…"
+            />
+            <p className="text-[10px] text-slate-400 mt-0.5 text-right">{note.length}/500</p>
+          </div>
+
+          {action === 'VOID' && (
+            <>
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1">Void Reason *</label>
+                <textarea
+                  value={voidReason}
+                  onChange={(e) => setVoidReason(e.target.value)}
+                  maxLength={500}
+                  rows={3}
+                  className={INPUT_CLS}
+                  required
+                  placeholder="Explain why this invoice is being voided…"
+                />
+                <p className="text-[10px] text-slate-400 mt-0.5 text-right">{voidReason.length}/500</p>
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1">Replacement Invoice ID (optional)</label>
+                <input
+                  type="text"
+                  value={replacementId}
+                  onChange={(e) => setReplacementId(e.target.value)}
+                  className={INPUT_CLS}
+                  placeholder="UUID of replacement invoice"
+                />
+              </div>
+            </>
+          )}
+
+          <div className="flex gap-2 pt-2">
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-bold text-white bg-[#14B87A] hover:bg-[#12a56d] disabled:opacity-50 rounded-lg transition-colors cursor-pointer"
+            >
+              {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              Resolve Dispute
+            </button>
+            <button type="button" onClick={onClose} className="px-4 py-2.5 text-xs font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function InvoiceDetailPage() {
@@ -92,6 +237,7 @@ export function InvoiceDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [resolveModalOpen, setResolveModalOpen] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -195,7 +341,16 @@ export function InvoiceDetailPage() {
             </div>
           </div>
           <div className="flex gap-2">
-            {invoice.status === 'DRAFT' && (
+            {invoice.status === 'DISPUTED' && (
+              <button
+                type="button"
+                onClick={() => setResolveModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-amber-500 hover:bg-amber-600 rounded-lg transition-colors cursor-pointer shadow-sm"
+              >
+                <AlertTriangle className="w-3.5 h-3.5" /> Resolve Dispute
+              </button>
+            )}
+            {invoice.status !== 'DISPUTED' && invoice.status === 'DRAFT' && (
               <button
                 type="button"
                 onClick={() => void handleIssue()}
@@ -205,7 +360,7 @@ export function InvoiceDetailPage() {
                 <CheckCircle2 className="w-3.5 h-3.5" /> Issue invoice
               </button>
             )}
-            {invoice.status !== 'PAID' && invoice.status !== 'VOID' && (
+            {invoice.status !== 'DISPUTED' && invoice.status !== 'PAID' && invoice.status !== 'VOID' && (
               <button
                 type="button"
                 onClick={() => void handleVoid()}
@@ -263,6 +418,29 @@ export function InvoiceDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* Dispute Info Card */}
+        {invoice.status === 'DISPUTED' && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-4.5 h-4.5 text-amber-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-amber-900 mb-1">Invoice Under Dispute</p>
+              {invoice.disputeReason && (
+                <p className="text-xs text-amber-800 mb-2">{invoice.disputeReason}</p>
+              )}
+              <div className="flex flex-wrap gap-4 text-[11px] text-amber-700">
+                {invoice.disputedAt && (
+                  <span>Disputed at: <span className="font-medium">{fmtDateTime(invoice.disputedAt)}</span></span>
+                )}
+                {invoice.statusBeforeDispute && (
+                  <span>Status before dispute: <span className="font-medium">{invoice.statusBeforeDispute}</span></span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Breakdown + Job Details */}
         <div className="grid grid-cols-3 gap-3">
@@ -402,6 +580,18 @@ export function InvoiceDetailPage() {
         )}
 
       </div>
+
+      {resolveModalOpen && (
+        <ResolveDisputeModal
+          invoiceId={invoice.id}
+          onClose={() => setResolveModalOpen(false)}
+          onResolved={async () => {
+            setResolveModalOpen(false);
+            const updated = await fetchInvoiceById(invoice.id).catch(() => null);
+            if (updated) setInvoice(updated);
+          }}
+        />
+      )}
     </div>
   );
 }

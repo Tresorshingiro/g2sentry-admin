@@ -39,6 +39,16 @@ export async function fetchAdminOrgById(id: string): Promise<unknown> {
   return null;
 }
 
+export async function fetchOrgLocations(id: string): Promise<unknown[]> {
+  const raw = await apiGet<unknown>(`/organizations/${id}/locations`);
+  return Array.isArray(raw) ? raw : ((raw as { items?: unknown[] })?.items ?? []);
+}
+
+export async function fetchOrgMembers(id: string): Promise<unknown[]> {
+  const raw = await apiGet<unknown>(`/organizations/${id}/members`);
+  return Array.isArray(raw) ? raw : ((raw as { items?: unknown[] })?.items ?? []);
+}
+
 export async function fetchClients(
   page = 1,
   limit = 20,

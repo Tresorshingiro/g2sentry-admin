@@ -8,6 +8,7 @@ const styles: Record<InvoiceStatus, string> = {
   PARTIALLY_PAID: 'bg-amber-100 text-amber-800',
   OVERDUE: 'bg-red-100 text-red-800',
   VOID: 'bg-slate-100 text-slate-400',
+  DISPUTED: 'bg-orange-100 text-orange-800',
 };
 
 const labels: Record<InvoiceStatus, string> = {
@@ -17,6 +18,7 @@ const labels: Record<InvoiceStatus, string> = {
   PARTIALLY_PAID: 'Partial',
   OVERDUE: 'Overdue',
   VOID: 'Void',
+  DISPUTED: 'Disputed',
 };
 
 export function InvoiceStatusBadge({ status }: { status: InvoiceStatus }) {

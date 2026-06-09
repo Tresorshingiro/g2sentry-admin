@@ -4,7 +4,8 @@ export type InvoiceStatus =
   | 'PAID'
   | 'PARTIALLY_PAID'
   | 'OVERDUE'
-  | 'VOID';
+  | 'VOID'
+  | 'DISPUTED';
 export type InvoiceFilter = 'ALL' | InvoiceStatus;
 
 /** Shape returned by GET /api/v1/admin/invoices items */
@@ -99,6 +100,37 @@ export interface InvoiceDetail {
   payments: InvoicePayment[];
   ebmReceipt: InvoiceEbmReceipt | null;
   job: InvoiceJobDetail | null;
+  disputeReason: string | null;
+  disputedAt: string | null;
+  statusBeforeDispute: InvoiceStatus | null;
+}
+
+export type InvoiceStatusExtended = InvoiceStatus | 'DISPUTED';
+
+export interface Payment {
+  id: string;
+  provider: string;
+  amount: string;
+  currency: string;
+  status: string;
+  paidAt: string | null;
+  externalTxnId: string | null;
+  createdAt: string;
+  invoiceId?: string;
+  organizationId?: string;
+  organizationName?: string;
+}
+
+export interface PaymentListResponse {
+  items: Payment[];
+  meta: { page: number; limit: number; total: number; hasMore: boolean };
+}
+
+export interface ResolveDisputePayload {
+  action: 'CLEAR' | 'VOID';
+  note?: string;
+  voidReason?: string;
+  replacementInvoiceId?: string;
 }
 
 export interface InvoiceRow {

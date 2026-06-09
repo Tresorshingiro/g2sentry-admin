@@ -3,10 +3,13 @@ import {
   Briefcase,
   Building2,
   CheckSquare,
+  ClipboardList,
   FileText,
+  GitCompare,
   LayoutDashboard,
   LogOut,
   MapPin,
+  RefreshCcw,
   ScrollText,
   Settings,
   Shield,
@@ -54,8 +57,9 @@ const nav: NavGroup[] = [
   {
     section: 'Operations',
     items: [
-      { label: 'Jobs',      icon: Briefcase, path: '/assignments', permission: 'jobs:read' },
-      { label: 'Incidents', icon: Siren,     path: '/incidents',   permission: 'jobs:read' },
+      { label: 'Jobs',                 icon: Briefcase,   path: '/assignments',           permission: 'jobs:read' },
+      { label: 'Incidents',            icon: Siren,       path: '/incidents',             permission: 'jobs:read' },
+      { label: 'Replacement Requests', icon: RefreshCcw,  path: '/replacement-requests',  permission: 'admin:guardians:write' },
     ],
   },
   {
@@ -68,6 +72,8 @@ const nav: NavGroup[] = [
     section: 'Finance',
     items: [
       { label: 'Billing', icon: FileText, path: '/billing', permission: 'admin:invoices:read' },
+      { label: 'Pricing & Policies', icon: ClipboardList, path: '/billing/pricing-policies', permission: 'admin:invoices:read' },
+      { label: 'Reconciliation', icon: GitCompare, path: '/billing/reconciliation', permission: 'admin:invoices:read' },
     ],
   },
   {

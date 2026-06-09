@@ -16,7 +16,7 @@ import {
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { fetchAdminOrgById, reviewOrganization } from '@/services/api';
+import { fetchAdminOrgById, fetchOrgLocations, fetchOrgMembers, reviewOrganization } from '@/services/api';
 
 const IBM = "'IBM Plex Sans', system-ui, sans-serif";
 
@@ -184,6 +184,8 @@ export function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
 
   const [client,        setClient]        = useState<ClientDetail | null>(null);
+  const [locations,     setLocations]     = useState<Location[]>([]);
+  const [members,       setMembers]       = useState<OrgMember[]>([]);
   const [loading,       setLoading]       = useState(true);
   const [loadError,     setLoadError]     = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
@@ -193,8 +195,14 @@ export function ClientDetailPage() {
 
   async function reload() {
     if (!id) return;
-    const data = await fetchAdminOrgById(id);
+    const [data, locs, mems] = await Promise.all([
+      fetchAdminOrgById(id),
+      fetchOrgLocations(id).catch(() => [] as unknown[]),
+      fetchOrgMembers(id).catch(() => [] as unknown[]),
+    ]);
     setClient(data as ClientDetail);
+    setLocations(locs as Location[]);
+    setMembers(mems as OrgMember[]);
   }
 
   useEffect(() => {
@@ -204,8 +212,14 @@ export function ClientDetailPage() {
       setLoading(true);
       setLoadError(null);
       try {
-        const c = await fetchAdminOrgById(clientId);
+        const [c, locs, mems] = await Promise.all([
+          fetchAdminOrgById(clientId),
+          fetchOrgLocations(clientId).catch(() => [] as unknown[]),
+          fetchOrgMembers(clientId).catch(() => [] as unknown[]),
+        ]);
         setClient(c as ClientDetail);
+        setLocations(locs as Location[]);
+        setMembers(mems as OrgMember[]);
       } catch (err: unknown) {
         setLoadError(err instanceof Error ? err.message : 'Failed to load client');
       } finally {
@@ -288,8 +302,6 @@ export function ClientDetailPage() {
   if (loadError) return <div className="p-6 text-red-600">{loadError}</div>;
   if (!client)   return <div className="p-6 text-slate-500">Client not found.</div>;
 
-  const locations = client.locations ?? [];
-  const members   = client.members   ?? [];
 
   const verifyState =
     client.verificationStatus === 'VERIFIED' ? 'done'

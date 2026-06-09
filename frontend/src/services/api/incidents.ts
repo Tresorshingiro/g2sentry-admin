@@ -29,8 +29,26 @@ export async function fetchAllIncidents(
   severity?: string,
   incidentType?: string,
 ): Promise<{ items: FieldIncident[]; meta: { page: number; limit: number; total: number; hasMore: boolean } }> {
-  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
-  if (severity)     params.set('severity', severity);
-  if (incidentType) params.set('incidentType', incidentType);
-  return apiGet(`/admin/incidents?${params}`);
+  // No global incidents endpoint exists — aggregate from recent jobs
+  const jobsRaw = await apiGet<unknown>('/jobs?page=1&limit=50').catch(() => ({ items: [] }));
+  const jobs: { id: string }[] = Array.isArray(jobsRaw)
+    ? (jobsRaw as { id: string }[])
+    : ((jobsRaw as { items?: { id: string }[] }).items ?? []);
+
+  const perJob = await Promise.all(
+    jobs.map((j) => fetchJobIncidents(j.id).catch(() => [] as FieldIncident[])),
+  );
+
+  let all = perJob
+    .flat()
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  if (severity)     all = all.filter((i) => i.severity === severity);
+  if (incidentType) all = all.filter((i) => i.incidentType === incidentType);
+
+  const total = all.length;
+  const start = (page - 1) * limit;
+  const items = all.slice(start, start + limit);
+
+  return { items, meta: { page, limit, total, hasMore: start + items.length < total } };
 }

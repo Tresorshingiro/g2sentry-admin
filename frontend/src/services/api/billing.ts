@@ -4,6 +4,9 @@ import type {
   InvoiceDetail,
   InvoiceListResponse,
   MonthlyRevenueStat,
+  Payment,
+  PaymentListResponse,
+  ResolveDisputePayload,
 } from '@/types/billing';
 import { apiGet, apiPost } from '@/lib/api-client';
 import type { RawJobFactsDaily } from './analytics';
@@ -157,5 +160,19 @@ export async function voidInvoice(id: string): Promise<unknown> {
 }
 
 export async function fetchInvoiceById(id: string): Promise<InvoiceDetail> {
-  return apiGet(`/invoices/${id}`);
+  const inv = await apiGet<InvoiceDetail>(`/invoices/${id}`);
+  return { ...inv, payments: inv.payments ?? [] };
+}
+
+export async function fetchPayments(page = 1, limit = 20): Promise<PaymentListResponse> {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  const raw = await apiGet<Payment[] | PaymentListResponse>(`/admin/payments?${params}`);
+  if (Array.isArray(raw)) {
+    return { items: raw, meta: { page, limit, total: raw.length, hasMore: raw.length === limit } };
+  }
+  return raw;
+}
+
+export async function resolveDispute(id: string, data: ResolveDisputePayload): Promise<unknown> {
+  return apiPost(`/admin/invoices/${id}/resolve-dispute`, data);
 }

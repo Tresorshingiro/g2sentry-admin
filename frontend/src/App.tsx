@@ -6,6 +6,8 @@ import { AssignmentDetailPage } from '@/pages/AssignmentDetailPage';
 import { AssignmentsPage } from '@/pages/AssignmentsPage';
 import { BillingPage } from '@/pages/BillingPage';
 import { InvoiceDetailPage } from '@/pages/InvoiceDetailPage';
+import { PricingPoliciesPage } from '@/pages/PricingPoliciesPage';
+import { ReconciliationPage } from '@/pages/ReconciliationPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { GuardianDetailPage } from '@/pages/GuardianDetailPage';
 import { GuardianEditPage } from '@/pages/GuardianEditPage';
@@ -21,6 +23,7 @@ import { ClientDetailPage } from '@/pages/ClientDetailPage';
 import { ClientsPage } from '@/pages/ClientsPage';
 import { VerificationsPage } from '@/pages/VerificationsPage';
 import { IncidentsPage } from '@/pages/IncidentsPage';
+import { ReplacementRequestsPage } from '@/pages/ReplacementRequestsPage';
 
 export default function App() {
   return (
@@ -160,6 +163,28 @@ export default function App() {
       />
 
       <Route
+        path="/billing/pricing-policies"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <PricingPoliciesPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/billing/reconciliation"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <ReconciliationPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
         path="/audit"
         element={
           <ProtectedRoute>
@@ -231,6 +256,17 @@ export default function App() {
           <ProtectedRoute>
             <AppLayout>
               <IncidentsPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/replacement-requests"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <ReplacementRequestsPage />
             </AppLayout>
           </ProtectedRoute>
         }

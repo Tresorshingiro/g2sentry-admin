@@ -1,4 +1,5 @@
 export * from './auth';
+export * from './pricing';
 export * from './map';
 export * from './dashboard';
 export * from './analytics';
