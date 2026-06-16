@@ -1,4 +1,4 @@
-import type { GuardianListResponse } from '@/types/guardian-roster';
+import type { GuardianListItem, GuardianListResponse } from '@/types/guardian-roster';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api-client';
 
 export async function fetchGuardianRoster(
@@ -11,6 +11,17 @@ export async function fetchGuardianRoster(
   if (status) params.set('status', status);
   if (verificationStatus) params.set('verificationStatus', verificationStatus);
   return apiGet<GuardianListResponse>(`/admin/guardians?${params}`);
+}
+
+// The API caps limit at 100 — page through to get the whole roster
+export async function fetchFullGuardianRoster(maxPages = 5): Promise<GuardianListItem[]> {
+  const items: GuardianListItem[] = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const res = await fetchGuardianRoster(page, 100);
+    items.push(...res.items);
+    if (!res.meta.hasMore) break;
+  }
+  return items;
 }
 
 export async function fetchGuardianProfile(id: string): Promise<unknown> {
@@ -29,6 +40,7 @@ export interface UpdateGuardianPayload {
   yearsExperience?: number;
   specializations?: string[];
   preferredShift?: 'DAY' | 'NIGHT' | 'BOTH';
+  hourlyPayRate?: number;
 }
 
 export async function updateGuardian(id: string, dto: UpdateGuardianPayload): Promise<unknown> {

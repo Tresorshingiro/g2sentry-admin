@@ -1,8 +1,22 @@
-import { mockAppSettings, type AppSettings } from '../mock/settings';
+import { apiGet, apiPatch } from '@/lib/api-client';
 
-const delay = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
+export interface AdminProfile {
+  id: string;
+  phone: string;
+  email: string | null;
+  roles: string[];
+  activeRole: string | null;
+}
 
-export async function fetchAppSettings(): Promise<AppSettings> {
-  await delay(200);
-  return { ...mockAppSettings };
+export async function fetchAdminProfile(): Promise<AdminProfile> {
+  return apiGet<AdminProfile>('/users/me');
+}
+
+export async function updateAdminEmail(email: string): Promise<unknown> {
+  return apiPatch('/users/me', { email });
+}
+
+export async function fetchDistricts(): Promise<string[]> {
+  const res = await apiGet<{ districts: string[] }>('/regions/districts');
+  return res.districts;
 }

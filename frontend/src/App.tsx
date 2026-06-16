@@ -23,6 +23,7 @@ import { ClientDetailPage } from '@/pages/ClientDetailPage';
 import { ClientsPage } from '@/pages/ClientsPage';
 import { VerificationsPage } from '@/pages/VerificationsPage';
 import { IncidentsPage } from '@/pages/IncidentsPage';
+import { PayoutsPage } from '@/pages/PayoutsPage';
 import { ReplacementRequestsPage } from '@/pages/ReplacementRequestsPage';
 
 export default function App() {
@@ -146,6 +147,17 @@ export default function App() {
           <ProtectedRoute>
             <AppLayout>
               <BillingPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/payouts"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <PayoutsPage />
             </AppLayout>
           </ProtectedRoute>
         }

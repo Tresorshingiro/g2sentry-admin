@@ -1,5 +1,6 @@
 import type { ClientListItem, ClientListResponse, ClientVerificationStatus } from '@/types/client';
 import { apiGet } from '@/lib/api-client';
+import { fetchDistricts } from './settings';
 
 export async function fetchClientById(id: string): Promise<unknown> {
   return apiGet(`/organizations/${id}`);
@@ -49,6 +50,26 @@ export async function fetchOrgMembers(id: string): Promise<unknown[]> {
   return Array.isArray(raw) ? raw : ((raw as { items?: unknown[] })?.items ?? []);
 }
 
+// Raw org shape from /admin/organizations (locations are nested, no primaryDistrict)
+interface RawOrgItem {
+  id: string;
+  legalName: string;
+  tradingName: string | null;
+  tinNumber: string | null;
+  orgType: string | null;
+  verificationStatus: ClientVerificationStatus;
+  createdAt: string;
+  activeJobCount?: number;
+  outstandingBalance?: number;
+  locations?: { district: string; isPrimary: boolean }[];
+}
+
+function derivePrimaryDistrict(org: RawOrgItem): string | null {
+  const locs = org.locations ?? [];
+  const primary = locs.find((l) => l.isPrimary) ?? locs[0];
+  return primary?.district ?? null;
+}
+
 export async function fetchClients(
   page = 1,
   limit = 20,
@@ -56,43 +77,54 @@ export async function fetchClients(
   district?: string,
   orgType?: string,
 ): Promise<ClientListResponse> {
-  const params = new URLSearchParams();
-  if (verificationStatus) params.set('status', verificationStatus);
-  const query = params.toString();
-  const raw = await apiGet<ClientListResponse | ClientListItem[]>(
-    `/admin/organizations${query ? `?${query}` : ''}`,
-  );
-  const normalize = (c: ClientListItem): ClientListItem => ({
-    ...c,
-    activeJobCount: c.activeJobCount ?? 0,
-    outstandingBalance: c.outstandingBalance ?? 0,
-  });
+  const allParams = new URLSearchParams({ page: '1', limit: '100' });
+  if (verificationStatus) allParams.set('status', verificationStatus);
 
-  let fullList: ClientListItem[] = Array.isArray(raw)
-    ? raw.map(normalize)
-    : ((raw as ClientListResponse).items ?? []).map(normalize);
+  const [allRaw, districtsRes] = await Promise.all([
+    apiGet<{ items: RawOrgItem[]; meta: { total: number } } | RawOrgItem[]>(
+      `/admin/organizations?${allParams}`,
+    ),
+    fetchDistricts().catch(() => [] as string[]),
+  ]);
 
-  const availableDistricts = [...new Set(
-    fullList.map((c) => c.primaryDistrict).filter(Boolean) as string[],
-  )].sort();
+  const rawItems: RawOrgItem[] = Array.isArray(allRaw)
+    ? allRaw
+    : (allRaw as { items: RawOrgItem[] }).items ?? [];
+
+  const allItems: ClientListItem[] = rawItems.map((org) => ({
+    id: org.id,
+    legalName: org.legalName,
+    tradingName: org.tradingName,
+    tinNumber: org.tinNumber,
+    orgType: org.orgType,
+    verificationStatus: org.verificationStatus,
+    createdAt: org.createdAt,
+    primaryDistrict: derivePrimaryDistrict(org),
+    activeJobCount: org.activeJobCount ?? 0,
+    outstandingBalance: org.outstandingBalance ?? 0,
+  }));
+
+  const availableDistricts = districtsRes.length > 0
+    ? districtsRes
+    : [...new Set(allItems.map((c) => c.primaryDistrict).filter(Boolean) as string[])].sort();
+
   const availableOrgTypes = [...new Set(
-    fullList.map((c) => c.orgType).filter(Boolean) as string[],
+    allItems.map((c) => c.orgType).filter(Boolean) as string[],
   )].sort();
 
   const statusCounts: Partial<Record<ClientVerificationStatus, number>> = {};
-  for (const c of fullList) {
+  for (const c of allItems) {
     if (c.verificationStatus) {
       statusCounts[c.verificationStatus] = (statusCounts[c.verificationStatus] ?? 0) + 1;
     }
   }
 
-  if (district) fullList = fullList.filter((c) => c.primaryDistrict === district);
-  if (orgType)  fullList = fullList.filter((c) => c.orgType === orgType);
+  let filtered = allItems;
+  if (district) filtered = filtered.filter((c) => c.primaryDistrict === district);
+  if (orgType)  filtered = filtered.filter((c) => c.orgType === orgType);
 
-  const total = fullList.length;
-  const items = Array.isArray(raw)
-    ? fullList.slice((page - 1) * limit, page * limit)
-    : fullList;
+  const total = filtered.length;
+  const items = filtered.slice((page - 1) * limit, page * limit);
 
   return {
     items,

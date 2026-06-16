@@ -14,6 +14,7 @@ import {
   Settings,
   Shield,
   Siren,
+  Wallet,
   X,
 } from 'lucide-react';
 import type { ElementType } from 'react';
@@ -72,6 +73,7 @@ const nav: NavGroup[] = [
     section: 'Finance',
     items: [
       { label: 'Billing', icon: FileText, path: '/billing', permission: 'admin:invoices:read' },
+      { label: 'Guardian Payouts', icon: Wallet, path: '/payouts', permission: 'admin:guardians:read' },
       { label: 'Pricing & Policies', icon: ClipboardList, path: '/billing/pricing-policies', permission: 'admin:invoices:read' },
       { label: 'Reconciliation', icon: GitCompare, path: '/billing/reconciliation', permission: 'admin:invoices:read' },
     ],
@@ -128,7 +130,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
           </div>
           <div>
             <span className="text-white font-bold text-sm tracking-tight leading-none">G2Sentry</span>
-            <p className="text-[8px] font-bold text-slate-600 uppercase tracking-widest leading-none mt-0.5">Admin Portal</p>
+            <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest leading-none mt-0.5">Admin Portal</p>
           </div>
         </div>
         <button
@@ -142,13 +144,13 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
       </div>
 
       {/* ── Nav ── */}
-      <nav className="flex-1 px-3 space-y-4 overflow-y-auto py-2">
+      <nav className="flex-1 px-3 space-y-4 overflow-y-auto scrollbar-hide py-2">
         {nav.map((group) => {
           const visible = group.items.filter(canSee);
           if (!visible.length) return null;
           return (
             <div key={group.section}>
-              <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest px-2 mb-1.5">
+              <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest px-2 mb-1.5">
                 {group.section}
               </p>
               <ul className="space-y-0.5">
@@ -159,14 +161,14 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
                       onClick={onClose}
                       className={({ isActive }) =>
                         cn(
-                          'flex items-center gap-2.5 px-2.5 py-2 rounded text-xs transition-colors',
+                          'flex items-center gap-2.5 px-2.5 py-2 rounded text-sm transition-colors',
                           isActive
                             ? 'bg-[#14B87A]/15 text-[#14B87A] font-semibold'
                             : 'text-slate-400 hover:bg-white/5 hover:text-white',
                         )
                       }
                     >
-                      <item.icon className="w-3.5 h-3.5 shrink-0" />
+                      <item.icon className="w-4 h-4 shrink-0" />
                       {item.label}
                     </NavLink>
                   </li>
@@ -190,7 +192,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
             <p className="text-white text-xs font-semibold leading-tight truncate">
               {user?.name ?? 'Admin'}
             </p>
-            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest leading-tight mt-0.5 truncate">
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-tight mt-0.5 truncate">
               {roleLabel}
             </p>
           </div>

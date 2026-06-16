@@ -6,7 +6,7 @@ import {
   UserX,
   XCircle,
 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   approveReplacement,
   denyReplacement,
@@ -24,7 +24,7 @@ function timeAgo(iso: string): string {
 }
 
 function guardianLabel(r: ReplacementRequest): string {
-  return r.guardian?.user?.fullName ?? r.guardian?.user?.phoneNumber ?? r.guardian?.guardianCode ?? '—';
+  return r.guardian?.user?.fullName ?? r.guardian?.user?.email ?? r.guardian?.guardianCode ?? '—';
 }
 
 function orgLabel(r: ReplacementRequest): string {
@@ -47,6 +47,7 @@ function DenyForm({ onConfirm, onCancel, loading }: DenyFormProps) {
         type="text"
         value={note}
         onChange={(e) => setNote(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter' && !loading) onConfirm(note); }}
         placeholder="Optional note to guardian…"
         maxLength={500}
         className="flex-1 border border-slate-200 rounded px-2.5 py-1.5 text-xs text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-red-400 focus:border-red-400 transition-colors"
@@ -81,29 +82,34 @@ export function ReplacementRequestsPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [denyingId, setDenyingId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    fetchReplacementRequests()
+  const doFetch = useCallback(() => {
+    return fetchReplacementRequests()
       .then(setRequests)
       .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Failed to load requests'))
       .finally(() => setLoading(false));
   }, []);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { load(); }, [load]);
+  const load = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    void doFetch();
+  }, [doFetch]);
+
+  useEffect(() => { void doFetch(); }, [doFetch]);
 
   function showToast(msg: string, ok: boolean) {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
     setToast({ msg, ok });
-    setTimeout(() => setToast(null), 3500);
+    toastTimer.current = setTimeout(() => setToast(null), 3500);
   }
 
   async function handleApprove(r: ReplacementRequest) {
-    setActionLoading(r.assignmentId);
+    setActionLoading(r.id);
     try {
-      await approveReplacement(r.assignmentId);
-      setRequests((prev) => prev.filter((x) => x.assignmentId !== r.assignmentId));
+      await approveReplacement(r.id);
+      setRequests((prev) => prev.filter((x) => x.id !== r.id));
       showToast('Replacement approved — re-dispatch triggered.', true);
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'Approve failed', false);
@@ -113,10 +119,10 @@ export function ReplacementRequestsPage() {
   }
 
   async function handleDeny(r: ReplacementRequest, note: string) {
-    setActionLoading(r.assignmentId);
+    setActionLoading(r.id);
     try {
-      await denyReplacement(r.assignmentId, note || undefined);
-      setRequests((prev) => prev.filter((x) => x.assignmentId !== r.assignmentId));
+      await denyReplacement(r.id, note || undefined);
+      setRequests((prev) => prev.filter((x) => x.id !== r.id));
       setDenyingId(null);
       showToast('Replacement request denied.', true);
     } catch (err: unknown) {
@@ -178,10 +184,11 @@ export function ReplacementRequestsPage() {
           </div>
         )}
 
-        {/* Loading skeleton */}
+        {/* Loading */}
         {loading && (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-6 h-6 animate-spin text-slate-300" />
+            
           </div>
         )}
 
@@ -208,12 +215,12 @@ export function ReplacementRequestsPage() {
               </thead>
               <tbody>
                 {requests.map((r) => {
-                  const isDenying = denyingId === r.assignmentId;
-                  const isActing = actionLoading === r.assignmentId;
+                  const isDenying = denyingId === r.id;
+                  const isActing = actionLoading === r.id;
 
                   return (
                     <tr
-                      key={r.assignmentId}
+                      key={r.id}
                       className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors align-top"
                     >
                       {/* Guardian */}
@@ -243,7 +250,9 @@ export function ReplacementRequestsPage() {
 
                       {/* Reason */}
                       <td className="px-4 py-3 max-w-[240px]">
-                        <p className="text-xs text-slate-700 leading-relaxed line-clamp-3">{r.reason}</p>
+                        <p className="text-xs text-slate-700 leading-relaxed line-clamp-3">
+                          {r.replacementReason ?? '—'}
+                        </p>
                         {isDenying && (
                           <DenyForm
                             loading={isActing}
@@ -255,7 +264,7 @@ export function ReplacementRequestsPage() {
 
                       {/* Requested */}
                       <td className="px-4 py-3 text-[11px] text-slate-400 whitespace-nowrap">
-                        {timeAgo(r.requestedAt)}
+                        {timeAgo(r.replacementRequestedAt)}
                       </td>
 
                       {/* Actions */}
@@ -275,7 +284,7 @@ export function ReplacementRequestsPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => setDenyingId(r.assignmentId)}
+                              onClick={() => setDenyingId(r.id)}
                               disabled={isActing}
                               className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 disabled:opacity-50 rounded transition-colors cursor-pointer"
                             >

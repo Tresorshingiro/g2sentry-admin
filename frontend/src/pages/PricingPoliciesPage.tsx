@@ -550,7 +550,7 @@ export function PricingPoliciesPage() {
             className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold text-white bg-[#14B87A] hover:bg-[#12a56d] rounded transition-colors cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
-            {subTab === 'PRICING_RULES' ? '+ New Rule' : '+ New Policy'}
+            {subTab === 'PRICING_RULES' ? 'New Rule' : 'New Policy'}
           </button>
         </div>
 

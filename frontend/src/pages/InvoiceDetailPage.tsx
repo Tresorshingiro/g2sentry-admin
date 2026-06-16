@@ -15,7 +15,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { InvoiceStatusBadge } from '@/components/shared/InvoiceStatusBadge';
 import { formatRWF } from '@/lib/utils';
-import { fetchInvoiceById, fetchOrgById, issueInvoice, resolveDispute, voidInvoice } from '@/services/api';
+import { fetchAssignmentById, fetchInvoiceById, fetchOrgById, issueInvoice, resolveDispute, voidInvoice } from '@/services/api';
 import type { InvoiceDetail, InvoicePayment, ResolveDisputePayload } from '@/types/billing';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -248,8 +248,36 @@ export function InvoiceDetailPage() {
       .then(async (inv) => {
         setInvoice(inv);
         setLoading(false);
-        const org = await fetchOrgById(inv.organizationId).catch(() => null);
+        // Fetch org name and full job details in parallel — the invoice endpoint
+        // only returns minimal job context (referenceNumber + status)
+        const [org, jobData] = await Promise.all([
+          fetchOrgById(inv.organizationId).catch(() => null),
+          fetchAssignmentById(inv.jobId).catch(() => null),
+        ]);
         if (org) setOrgName(org.tradingName ?? org.legalName);
+        if (jobData) {
+          const j = jobData as {
+            id: string; referenceNumber: string; jobType: string; priority: string;
+            status: string; requestedGuardianCount: number;
+            scheduledStart: string; scheduledEnd: string | null;
+            notes: string | null; specialInstructions: string | null;
+          };
+          setInvoice((prev) => prev ? {
+            ...prev,
+            job: {
+              id: j.id,
+              referenceNumber: j.referenceNumber,
+              jobType: j.jobType ?? '',
+              priority: j.priority ?? '',
+              status: j.status,
+              requestedGuardianCount: j.requestedGuardianCount ?? 0,
+              scheduledStart: j.scheduledStart ?? '',
+              scheduledEnd: j.scheduledEnd ?? '',
+              notes: j.notes ?? null,
+              specialInstructions: j.specialInstructions ?? null,
+            },
+          } : prev);
+        }
       })
       .catch(() => {
         setError('Invoice not found');

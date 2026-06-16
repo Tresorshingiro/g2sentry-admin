@@ -14,6 +14,7 @@ export interface RawJobFactsDaily {
   date: string;
   district: string;
   jobType: string;
+  hourOfDay: number | null;
   jobCount: number;
   completedCount: number;
   cancelledCount: number;
@@ -21,7 +22,7 @@ export interface RawJobFactsDaily {
   totalRevenue: string | number;
 }
 
-interface RawGuardianPerfDaily {
+export interface RawGuardianPerfDaily {
   date: string;
   guardianId: string;
   jobsAssigned: number;
@@ -30,6 +31,20 @@ interface RawGuardianPerfDaily {
   completionRate: string | number;
   avgResponseMinutes: string | number | null;
   avgRating: string | number | null;
+}
+
+// Prisma @db.Date fields serialize as full ISO timestamps ("2026-06-11T00:00:00.000Z").
+// Normalize to "YYYY-MM-DD" so string range comparisons and day-keyed lookups work.
+const toDayString = (iso: string) => iso.slice(0, 10);
+
+export async function fetchJobFactsDaily(): Promise<RawJobFactsDaily[]> {
+  const raw = await apiGet<RawJobFactsDaily[]>('/admin/analytics/jobs');
+  return Array.isArray(raw) ? raw.map(r => ({ ...r, date: toDayString(r.date) })) : [];
+}
+
+export async function fetchGuardianPerfDaily(): Promise<RawGuardianPerfDaily[]> {
+  const raw = await apiGet<RawGuardianPerfDaily[]>('/admin/analytics/guardians');
+  return Array.isArray(raw) ? raw.map(r => ({ ...r, date: toDayString(r.date) })) : [];
 }
 
 const JOB_TYPE_COLORS: Record<string, string> = {

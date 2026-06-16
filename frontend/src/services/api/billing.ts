@@ -1,6 +1,5 @@
 import type {
   BillingSummary,
-  EbmComplianceInfo,
   InvoiceDetail,
   InvoiceListResponse,
   MonthlyRevenueStat,
@@ -17,10 +16,7 @@ export interface MonthlyChartPoint {
   outstanding: number;
 }
 
-export async function fetchBillingOverview(): Promise<{
-  summary: BillingSummary;
-  ebm: EbmComplianceInfo;
-}> {
+export async function fetchBillingOverview(): Promise<{ summary: BillingSummary }> {
   type DashboardRes = { totalRevenue: string | number };
   const [dashboard, issuedRes, overdueRes, paidRes] = await Promise.all([
     apiGet<DashboardRes>('/admin/analytics/dashboard'),
@@ -34,14 +30,6 @@ export async function fetchBillingOverview(): Promise<{
   );
   const outstandingInvoiceCount = issuedRes.meta.total + overdueRes.meta.total;
   const vatCollected = paidRes.items.reduce((sum, inv) => sum + Number(inv.taxAmount ?? 0), 0);
-  const invoicesIssued = issuedRes.meta.total + paidRes.meta.total;
-  const ebmFiscalReceipts = paidRes.meta.total;
-
-  const now = new Date();
-  const nextFiling = new Date(now.getFullYear(), now.getMonth() + 1, 15);
-  const nextFilingDate = nextFiling.toLocaleDateString('en-GB', {
-    day: 'numeric', month: 'short', year: 'numeric',
-  });
 
   const summary: BillingSummary = {
     totalRevenue: Number(dashboard.totalRevenue ?? 0),
@@ -53,16 +41,7 @@ export async function fetchBillingOverview(): Promise<{
     vatCollected,
   };
 
-  const ebm: EbmComplianceInfo = {
-    status: 'compliant',
-    lastSync: new Date().toISOString(),
-    invoicesIssued,
-    ebmReceiptsSent: ebmFiscalReceipts,
-    vatCollected,
-    nextFilingDate,
-  };
-
-  return { summary, ebm };
+  return { summary };
 }
 
 export async function fetchBillingSummary(): Promise<BillingSummary> {
@@ -130,17 +109,6 @@ export async function fetchMonthlyRevenue(): Promise<MonthlyRevenueStat[]> {
     }));
 }
 
-export function fetchEbmCompliance(): Promise<EbmComplianceInfo> {
-  return Promise.resolve({
-    status: 'compliant',
-    lastSync: new Date().toISOString(),
-    invoicesIssued: 0,
-    ebmReceiptsSent: 0,
-    vatCollected: 0,
-    nextFilingDate: '—',
-  } as EbmComplianceInfo);
-}
-
 export async function fetchInvoices(
   page = 1,
   limit = 20,
@@ -159,9 +127,69 @@ export async function voidInvoice(id: string): Promise<unknown> {
   return apiPost(`/invoices/${id}/void`);
 }
 
+// Raw shape returned by GET /invoices/:id (ClientInvoiceDetailDto from backend)
+interface RawInvoiceDetail {
+  id: string;
+  organizationId: string;
+  jobId: string;
+  status: string;
+  currency: string;
+  amounts: { subtotal: string; tax: string; total: string };
+  job: { referenceNumber: string; status: string };
+  dispute?: {
+    reason: string;
+    disputedAt: string;
+    statusBeforeDispute?: string | null;
+    resolvedAt?: string | null;
+    resolutionNote?: string | null;
+  };
+  payments?: { id: string; status: string; provider: string; amount: string }[];
+  issuedAt: string | null;
+  dueAt: string | null;
+  createdAt: string;
+}
+
 export async function fetchInvoiceById(id: string): Promise<InvoiceDetail> {
-  const inv = await apiGet<InvoiceDetail>(`/invoices/${id}`);
-  return { ...inv, payments: inv.payments ?? [] };
+  const raw = await apiGet<RawInvoiceDetail>(`/invoices/${id}`);
+  return {
+    id: raw.id,
+    organizationId: raw.organizationId,
+    jobId: raw.jobId,
+    status: raw.status as InvoiceDetail['status'],
+    currency: raw.currency,
+    subtotal: raw.amounts.subtotal,
+    taxAmount: raw.amounts.tax,
+    total: raw.amounts.total,
+    issuedAt: raw.issuedAt,
+    dueAt: raw.dueAt,
+    createdAt: raw.createdAt,
+    payments: (raw.payments ?? []).map((p) => ({
+      id: p.id,
+      provider: p.provider,
+      amount: p.amount,
+      currency: raw.currency,
+      status: p.status,
+      paidAt: null,
+      externalTxnId: null,
+      createdAt: raw.createdAt,
+    })),
+    ebmReceipt: null,
+    job: {
+      id: raw.jobId,
+      referenceNumber: raw.job.referenceNumber,
+      jobType: '',
+      priority: '',
+      status: raw.job.status,
+      requestedGuardianCount: 0,
+      scheduledStart: '',
+      scheduledEnd: '',
+      notes: null,
+      specialInstructions: null,
+    },
+    disputeReason: raw.dispute?.reason ?? null,
+    disputedAt: raw.dispute?.disputedAt ?? null,
+    statusBeforeDispute: (raw.dispute?.statusBeforeDispute ?? null) as InvoiceDetail['statusBeforeDispute'],
+  };
 }
 
 export async function fetchPayments(page = 1, limit = 20): Promise<PaymentListResponse> {

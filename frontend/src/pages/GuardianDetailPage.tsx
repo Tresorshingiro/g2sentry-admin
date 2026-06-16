@@ -18,6 +18,7 @@ import {
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { PermissionGate } from '@/components/auth/PermissionGate';
+import { GuardianEarningsPanel } from '@/components/shared/GuardianEarningsPanel';
 import { cn } from '@/lib/utils';
 import {
   activateGuardian,
@@ -881,6 +882,13 @@ export function GuardianDetailPage() {
             </>
           )}
         </div>
+
+        {/* ── Earnings & payouts (full width) ── */}
+        {id && (
+          <div className="mt-4">
+            <GuardianEarningsPanel guardianId={id} />
+          </div>
+        )}
       </div>
     </div>
   );

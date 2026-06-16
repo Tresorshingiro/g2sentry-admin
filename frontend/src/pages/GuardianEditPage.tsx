@@ -141,6 +141,7 @@ interface GuardianDetail {
   coverageDistricts: string[];
   employmentType: string | null;
   yearsExperience: number | null;
+  hourlyPayRate?: string | number | null;
   specializations: string[];
   preferredShift: string | null;
   joinedAt: string;
@@ -204,6 +205,7 @@ export function GuardianEditPage() {
   const [preferredShift,    setPreferredShift]    = useState('');
   const [employmentType,    setEmploymentType]    = useState('');
   const [yearsExperience,   setYearsExperience]   = useState('');
+  const [hourlyPayRate,     setHourlyPayRate]     = useState('');
   const [specializations,   setSpecializations]   = useState<string[]>([]);
 
   useEffect(() => {
@@ -223,6 +225,7 @@ export function GuardianEditPage() {
         setPreferredShift(data.preferredShift ?? '');
         setEmploymentType(data.employmentType ?? '');
         setYearsExperience(data.yearsExperience != null ? String(data.yearsExperience) : '');
+        setHourlyPayRate(data.hourlyPayRate != null ? String(data.hourlyPayRate) : '');
         setSpecializations(data.specializations);
       })
       .catch((err: unknown) => setLoadError(err instanceof Error ? err.message : 'Failed to load guardian'))
@@ -309,6 +312,7 @@ export function GuardianEditPage() {
       if (preferredShift)  dto.preferredShift  = preferredShift  as UpdateGuardianPayload['preferredShift'];
       if (employmentType)  dto.employmentType  = employmentType  as UpdateGuardianPayload['employmentType'];
       if (yearsExperience !== '') dto.yearsExperience = Number(yearsExperience);
+      if (hourlyPayRate !== '' && Number(hourlyPayRate) >= 0) dto.hourlyPayRate = Number(hourlyPayRate);
       dto.specializations = specializations;
 
       await updateGuardian(id, dto);
@@ -528,6 +532,21 @@ export function GuardianEditPage() {
                   className="bg-slate-50"
                 />
               </div>
+            </div>
+            <div className="mb-4">
+              <FieldLabel optional>Hourly pay rate (RWF)</FieldLabel>
+              <Input
+                type="number"
+                min="0"
+                step="100"
+                value={hourlyPayRate}
+                onChange={(e) => setHourlyPayRate(e.target.value)}
+                placeholder="e.g. 5000"
+                className="bg-slate-50"
+              />
+              <p className="text-[10px] text-slate-400 mt-1">
+                Used to compute guardian earnings when a client pays. If unset, earnings accrue as <span className="font-semibold text-amber-600">Blocked</span> until a rate is set.
+              </p>
             </div>
             <div>
               <FieldLabel optional>Specializations</FieldLabel>

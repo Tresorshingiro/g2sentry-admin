@@ -2,15 +2,14 @@ import type { JobListResponse } from '@/types/assignment';
 import { apiGet, apiPatch, apiPost } from '@/lib/api-client';
 
 export interface ReplacementRequest {
-  id: string;
-  assignmentId: string;
-  reason: string;
+  id: string;                         // assignment ID — use this for API calls
+  replacementReason: string | null;
+  replacementRequestedAt: string;
   status: string;
-  requestedAt: string;
   guardian?: {
     id: string;
     guardianCode: string;
-    user?: { fullName: string | null; phoneNumber: string };
+    user?: { fullName: string | null; email?: string | null };
   };
   job?: {
     id: string;
@@ -59,4 +58,37 @@ export async function approveReplacement(assignmentId: string): Promise<unknown>
 
 export async function denyReplacement(assignmentId: string, note?: string): Promise<unknown> {
   return apiPost(`/admin/assignments/${assignmentId}/replacement/deny`, note ? { note } : {});
+}
+
+export interface JobTrackingData {
+  jobId: string;
+  jobStatus: string;
+  assignment: { id: string; status: string; acceptedAt: string | null; arrivedAt: string | null };
+  guardian: { id: string; displayName: string | null };
+  location: {
+    latitude: string | null; longitude: string | null;
+    speed: string | null; batteryLevel: number | null;
+    recordedAt: string | null; connected: boolean; reachable: boolean;
+  };
+  destination: { locationId: string; name: string; address: string | null; latitude: string; longitude: string };
+  distanceMeters: number | null;
+  etaMinutes: number | null;
+}
+
+export interface JobInvoiceSummary {
+  id: string;
+  status: string;
+  currency: string;
+  amounts: { subtotal: string; tax: string; total: string };
+  issuedAt: string | null;
+  dueAt: string | null;
+  createdAt: string;
+}
+
+export async function fetchJobTracking(jobId: string): Promise<JobTrackingData> {
+  return apiGet<JobTrackingData>(`/jobs/${jobId}/tracking`);
+}
+
+export async function fetchJobInvoice(jobId: string): Promise<JobInvoiceSummary> {
+  return apiGet<JobInvoiceSummary>(`/jobs/${jobId}/invoice`);
 }

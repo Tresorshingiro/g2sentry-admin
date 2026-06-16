@@ -7,10 +7,8 @@ import {
   Copy,
   CreditCard,
   Eye,
-  FilePlus,
   Receipt,
   Search,
-  ShieldCheck,
   TrendingDown,
   TrendingUp,
   XCircle,
@@ -30,7 +28,6 @@ import {
 } from '@/services/api';
 import type {
   BillingSummary,
-  EbmComplianceInfo,
   InvoiceFilter,
   InvoiceRow,
   Payment,
@@ -168,7 +165,6 @@ export function BillingPage() {
   const navigate = useNavigate();
 
   const [summary, setSummary] = useState<BillingSummary | null>(null);
-  const [ebm, setEbm] = useState<EbmComplianceInfo | null>(null);
   const [chartData, setChartData] = useState<MonthlyChartPoint[]>([]);
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -180,14 +176,11 @@ export function BillingPage() {
 
   const currentMonthLabel = new Date().toLocaleDateString('en', { month: 'long', year: 'numeric' });
   const totalPages = Math.max(1, Math.ceil(total / 20));
-  const ebmLastSync = ebm
-    ? new Date(ebm.lastSync).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-    : '—';
   const isPaymentsTab = activeTab === 'PAYMENTS';
 
   useEffect(() => {
     void fetchBillingOverview()
-      .then(({ summary: s, ebm: e }) => { setSummary(s); setEbm(e); })
+      .then(({ summary: s }) => setSummary(s))
       .catch(() => null);
     void fetchMonthlyChartData().then(setChartData).catch(() => null);
   }, []);
@@ -327,12 +320,6 @@ export function BillingPage() {
             >
               <Calendar className="w-3 h-3" /> {currentMonthLabel}
             </button>
-            <button
-              type="button"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold text-white bg-[#14B87A] hover:bg-[#12a56d] rounded transition-colors cursor-pointer"
-            >
-              <FilePlus className="w-3.5 h-3.5" /> Generate invoice
-            </button>
           </div>
         </div>
 
@@ -372,11 +359,9 @@ export function BillingPage() {
           />
         </div>
 
-        {/* ── Chart + Tax compliance ──────────────────────────────────────────── */}
-        {!isPaymentsTab && <div className="grid grid-cols-3 gap-2.5">
-
-          {/* Revenue chart */}
-          <div className="col-span-2 bg-white border border-slate-200 rounded overflow-hidden">
+        {/* ── Revenue chart ───────────────────────────────────────────────────── */}
+        {!isPaymentsTab && (
+          <div className="bg-white border border-slate-200 rounded overflow-hidden">
             <div className="flex items-baseline justify-between px-4 pt-3.5 pb-2 border-b border-slate-100">
               <div>
                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Monthly overview</p>
@@ -390,59 +375,7 @@ export function BillingPage() {
               <ReactECharts option={chartOption} style={{ height: 140 }} />
             </div>
           </div>
-
-          {/* Tax compliance */}
-          <div className="bg-white border border-slate-200 border-t-[3px] border-t-blue-500 rounded overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-              <div>
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Tax Compliance</p>
-                <p className="text-xs font-semibold text-slate-900 mt-0.5">Rwanda Revenue Authority</p>
-              </div>
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold border border-blue-200 bg-blue-50 text-blue-700 tracking-widest">
-                RRA · EBM
-              </span>
-            </div>
-            {ebm ? (
-              <div className="px-4 py-3">
-                <div className="flex items-center gap-2.5 px-3 py-2 mb-3 bg-emerald-50 border border-emerald-200 rounded">
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#14B87A] shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <span className="text-[10px] font-bold text-emerald-800 tracking-wide">EBM COMPLIANT</span>
-                    <span className="text-[10px] text-slate-500 ml-2">Updated {ebmLastSync}</span>
-                  </div>
-                  <span className="shrink-0 text-[8px] font-bold text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded bg-emerald-100 uppercase tracking-widest">
-                    Active
-                  </span>
-                </div>
-
-                {(
-                  [
-                    ['Invoices issued', String(ebm.invoicesIssued)],
-                    ['EBM fiscal receipts', String(ebm.ebmReceiptsSent)],
-                    ['VAT collected (18%)', formatRWF(ebm.vatCollected)],
-                    ['VAT return deadline', ebm.nextFilingDate],
-                  ] as [string, string][]
-                ).map(([k, v]) => (
-                  <div key={k} className="flex justify-between items-center py-1.5 border-b border-slate-50 last:border-0">
-                    <span className="text-[10px] text-slate-500">{k}</span>
-                    <span className="font-mono text-[10px] font-semibold text-slate-800">{v}</span>
-                  </div>
-                ))}
-
-                <div className="flex items-center justify-between pt-2.5">
-                  <span className="text-[10px] text-slate-500">Filing status</span>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold border border-emerald-200 bg-emerald-50 text-emerald-700">
-                    <CheckCircle2 className="w-2.5 h-2.5" /> ON TRACK
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <div className="px-4 py-6 flex items-center justify-center">
-                <p className="text-[10px] text-slate-400">Loading…</p>
-              </div>
-            )}
-          </div>
-        </div>}
+        )}
 
         {/* ── Invoice / Payments table ────────────────────────────────────────── */}
         <div className="bg-white border border-slate-200 rounded overflow-hidden">

@@ -4,19 +4,28 @@ import {
   Calendar,
   CheckCircle2,
   Clock,
+  FileText,
+  Locate,
   MapPin,
+  Navigation,
+  RefreshCcw,
   SendHorizontal,
   Shield,
+  Timer,
   Users,
   XCircle,
   Zap,
   Siren,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { PermissionGate } from '@/components/auth/PermissionGate';
-import { cn } from '@/lib/utils';
-import { cancelJob, completeJob, dispatchJob, fetchAssignmentById, fetchJobIncidents, type FieldIncident } from '@/services/api';
+import { cn, formatRWF } from '@/lib/utils';
+import {
+  cancelJob, completeJob, dispatchJob, fetchAssignmentById, fetchJobIncidents,
+  fetchJobTracking, fetchJobInvoice,
+  type FieldIncident, type JobTrackingData, type JobInvoiceSummary,
+} from '@/services/api';
 
 const IBM = "'IBM Plex Sans', system-ui, sans-serif";
 
@@ -180,14 +189,33 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
 // ── Page ──────────────────────────────────────────────────────────────────────
 const AVATAR_COLORS = ['bg-green-700','bg-blue-700','bg-violet-700','bg-amber-600','bg-cyan-700'];
 
+const TRACKABLE_STATUSES = ['ASSIGNED', 'IN_PROGRESS'];
+const INVOICE_STATUS_CFG: Record<string, { cls: string; label: string }> = {
+  DRAFT:    { cls: 'bg-slate-100 text-slate-500',   label: 'Draft' },
+  ISSUED:   { cls: 'bg-blue-100 text-blue-700',     label: 'Issued' },
+  PAID:     { cls: 'bg-emerald-100 text-emerald-700', label: 'Paid' },
+  OVERDUE:  { cls: 'bg-red-100 text-red-700',       label: 'Overdue' },
+  DISPUTED: { cls: 'bg-amber-100 text-amber-700',   label: 'Disputed' },
+  VOID:     { cls: 'bg-slate-100 text-slate-400',   label: 'Void' },
+};
+
 export function AssignmentDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [job, setJob] = useState<JobDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [incidents, setIncidents] = useState<FieldIncident[]>([]);
+
+  const [tracking, setTracking] = useState<JobTrackingData | null>(null);
+  const [trackingUnavailable, setTrackingUnavailable] = useState(false);
+  const [trackingUpdatedAt, setTrackingUpdatedAt] = useState<number | null>(null);
+  const trackingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const [invoice, setInvoice] = useState<JobInvoiceSummary | null>(null);
+  const [invoiceLoading, setInvoiceLoading] = useState(true);
 
   useEffect(() => {
     if (!id) return;
@@ -212,6 +240,36 @@ export function AssignmentDetailPage() {
     void load();
     return () => { cancelled = true; };
   }, [id]);
+
+  // Fetch invoice once job loads
+  useEffect(() => {
+    if (!id) return;
+    setInvoiceLoading(true);
+    fetchJobInvoice(id)
+      .then(setInvoice)
+      .catch(() => setInvoice(null))
+      .finally(() => setInvoiceLoading(false));
+  }, [id]);
+
+  // Live tracking — poll every 30s for trackable job statuses
+  useEffect(() => {
+    if (!id || !job) return;
+    if (!TRACKABLE_STATUSES.includes(job.status)) {
+      setTracking(null);
+      setTrackingUnavailable(false);
+      return;
+    }
+    function poll() {
+      fetchJobTracking(id!)
+        .then((data) => { setTracking(data); setTrackingUnavailable(false); setTrackingUpdatedAt(Date.now()); })
+        .catch(() => { setTracking(null); setTrackingUnavailable(true); });
+    }
+    poll();
+    trackingIntervalRef.current = setInterval(poll, 30_000);
+    return () => {
+      if (trackingIntervalRef.current) clearInterval(trackingIntervalRef.current);
+    };
+  }, [id, job?.status]);
 
   async function handleAction(fn: () => Promise<unknown>, msg: string) {
     if (!id || actionLoading) return;
@@ -701,6 +759,168 @@ export function AssignmentDetailPage() {
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Invoice panel */}
+          <div className="bg-white rounded border border-slate-200 overflow-hidden">
+            <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-slate-100 bg-slate-50/60">
+              <FileText className="w-3.5 h-3.5 text-slate-400" />
+              <h3 className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Invoice</h3>
+            </div>
+            <div className="p-4">
+              {invoiceLoading ? (
+                <div className="flex items-center gap-2 text-xs text-slate-400">
+                  <div className="w-3.5 h-3.5 border-2 border-slate-200 border-t-slate-400 rounded-full animate-spin" />
+                  Loading…
+                </div>
+              ) : invoice ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className={cn('px-2 py-0.5 rounded text-[11px] font-semibold', (INVOICE_STATUS_CFG[invoice.status] ?? INVOICE_STATUS_CFG.DRAFT).cls)}>
+                      {(INVOICE_STATUS_CFG[invoice.status] ?? { label: invoice.status }).label}
+                    </span>
+                    <span className="font-mono text-sm font-bold text-slate-900">{formatRWF(Number(invoice.amounts.total))}</span>
+                  </div>
+                  <div className="space-y-1.5 text-[11px] text-slate-500">
+                    <div className="flex justify-between">
+                      <span>Subtotal</span>
+                      <span className="font-mono">{formatRWF(Number(invoice.amounts.subtotal))}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Tax (18% VAT)</span>
+                      <span className="font-mono">{formatRWF(Number(invoice.amounts.tax))}</span>
+                    </div>
+                    {invoice.issuedAt && (
+                      <div className="flex justify-between pt-1 border-t border-slate-100">
+                        <span>Issued</span>
+                        <span className="font-mono">{new Date(invoice.issuedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                      </div>
+                    )}
+                    {invoice.dueAt && (
+                      <div className="flex justify-between">
+                        <span>Due</span>
+                        <span className="font-mono">{new Date(invoice.dueAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/billing/${invoice.id}`)}
+                    className="flex items-center justify-center gap-1.5 w-full py-2 text-xs font-semibold text-[#14B87A] border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 rounded transition-colors cursor-pointer"
+                  >
+                    <FileText className="w-3.5 h-3.5" /> View Invoice
+                  </button>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400">No invoice generated yet.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Live tracking panel */}
+          {TRACKABLE_STATUSES.includes(job.status) && (
+            <div className="bg-white rounded border border-slate-200 overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 bg-slate-50/60">
+                <div className="flex items-center gap-2.5">
+                  <Locate className="w-3.5 h-3.5 text-slate-400" />
+                  <h3 className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Live Tracking</h3>
+                </div>
+                {tracking && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      fetchJobTracking(id!)
+                        .then((d) => { setTracking(d); setTrackingUpdatedAt(Date.now()); })
+                        .catch(() => setTrackingUnavailable(true));
+                    }}
+                    className="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                  >
+                    <RefreshCcw className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+              <div className="p-4">
+                {trackingUnavailable ? (
+                  <div className="text-center py-3">
+                    <Navigation className="w-6 h-6 text-slate-200 mx-auto mb-2" />
+                    <p className="text-xs text-slate-400">Location unavailable.</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Guardian may not have started their GPS yet.</p>
+                  </div>
+                ) : !tracking ? (
+                  <div className="flex items-center gap-2 text-xs text-slate-400">
+                    <div className="w-3.5 h-3.5 border-2 border-slate-200 border-t-slate-400 rounded-full animate-spin" />
+                    Fetching location…
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {/* Guardian */}
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded bg-green-700 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
+                        {(tracking.guardian.displayName ?? '?').split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-slate-900">{tracking.guardian.displayName ?? 'Guardian'}</p>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <div className={cn('w-1.5 h-1.5 rounded-full', ASSIGNMENT_STATUS[tracking.assignment.status]?.dot ?? 'bg-slate-300')} />
+                          <span className="text-[10px] text-slate-500">{ASSIGNMENT_STATUS[tracking.assignment.status]?.label ?? tracking.assignment.status}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Distance + ETA */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="bg-slate-50 rounded p-2.5 border border-slate-100">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                          <MapPin className="w-2.5 h-2.5" /> Distance
+                        </p>
+                        <p className="font-mono text-sm font-bold text-slate-900">
+                          {tracking.distanceMeters != null
+                            ? tracking.distanceMeters >= 1000
+                              ? `${(tracking.distanceMeters / 1000).toFixed(1)} km`
+                              : `${Math.round(tracking.distanceMeters)} m`
+                            : '—'}
+                        </p>
+                      </div>
+                      <div className="bg-slate-50 rounded p-2.5 border border-slate-100">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                          <Timer className="w-2.5 h-2.5" /> ETA
+                        </p>
+                        <p className="font-mono text-sm font-bold text-slate-900">
+                          {tracking.etaMinutes != null ? `${Math.round(tracking.etaMinutes)} min` : '—'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Location details */}
+                    {tracking.location.latitude && tracking.location.longitude ? (
+                      <div className="text-[10px] text-slate-400 space-y-0.5">
+                        <p className="font-mono">{Number(tracking.location.latitude).toFixed(5)}, {Number(tracking.location.longitude).toFixed(5)}</p>
+                        {tracking.location.recordedAt && (
+                          <p>Last seen {new Date(tracking.location.recordedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-slate-400">Coordinates not available yet.</p>
+                    )}
+
+                    {/* Destination */}
+                    <div className="pt-2 border-t border-slate-100">
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Destination</p>
+                      <p className="text-xs font-medium text-slate-700">{tracking.destination.name}</p>
+                      {tracking.destination.address && (
+                        <p className="text-[10px] text-slate-400 mt-0.5">{tracking.destination.address}</p>
+                      )}
+                    </div>
+
+                    {trackingUpdatedAt && (
+                      <p className="text-[9px] text-slate-300">
+                        Updated {new Date(trackingUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} · auto-refreshes every 30s
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}

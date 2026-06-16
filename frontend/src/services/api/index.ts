@@ -12,3 +12,4 @@ export * from './notifications';
 export * from './incidents';
 export * from './audit';
 export * from './settings';
+export * from './payouts';
