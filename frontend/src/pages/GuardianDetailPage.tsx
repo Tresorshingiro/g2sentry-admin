@@ -786,28 +786,52 @@ export function GuardianDetailPage() {
                           <ExternalLink className="w-3.5 h-3.5" /> View file
                         </button>
                       )}
-                      {c.verificationStatus === 'PENDING' && (
-                        <PermissionGate permission="admin:verification:write">
+                      <PermissionGate permission="admin:verification:write">
+                        {c.verificationStatus === 'PENDING' && (
+                          <>
+                            <button
+                              type="button"
+                              disabled={certBusy === c.id + '-v' || certBusy === c.id + '-r'}
+                              onClick={() => void handleVerifyCert(c.id)}
+                              className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-green-500 hover:bg-green-600 disabled:opacity-50 rounded transition-colors cursor-pointer"
+                            >
+                              <CheckCircle2 className="w-3 h-3" />
+                              {certBusy === c.id + '-v' ? '…' : 'Verify'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={certBusy === c.id + '-v' || certBusy === c.id + '-r'}
+                              onClick={() => void handleRejectCert(c.id)}
+                              className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 disabled:opacity-50 rounded transition-colors cursor-pointer"
+                            >
+                              <XCircle className="w-3 h-3" />
+                              {certBusy === c.id + '-r' ? '…' : 'Reject'}
+                            </button>
+                          </>
+                        )}
+                        {c.verificationStatus === 'VERIFIED' && (
                           <button
                             type="button"
-                            disabled={certBusy === c.id + '-v' || certBusy === c.id + '-r'}
-                            onClick={() => void handleVerifyCert(c.id)}
-                            className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-green-500 hover:bg-green-600 disabled:opacity-50 rounded transition-colors cursor-pointer"
-                          >
-                            <CheckCircle2 className="w-3 h-3" />
-                            {certBusy === c.id + '-v' ? '…' : 'Verify'}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={certBusy === c.id + '-v' || certBusy === c.id + '-r'}
+                            disabled={certBusy === c.id + '-r'}
                             onClick={() => void handleRejectCert(c.id)}
                             className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 disabled:opacity-50 rounded transition-colors cursor-pointer"
                           >
                             <XCircle className="w-3 h-3" />
-                            {certBusy === c.id + '-r' ? '…' : 'Reject'}
+                            {certBusy === c.id + '-r' ? '…' : 'Revoke'}
                           </button>
-                        </PermissionGate>
-                      )}
+                        )}
+                        {(c.verificationStatus === 'REJECTED' || c.verificationStatus === 'EXPIRED') && (
+                          <button
+                            type="button"
+                            disabled={certBusy === c.id + '-v'}
+                            onClick={() => void handleVerifyCert(c.id)}
+                            className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-green-500 hover:bg-green-600 disabled:opacity-50 rounded transition-colors cursor-pointer"
+                          >
+                            <CheckCircle2 className="w-3 h-3" />
+                            {certBusy === c.id + '-v' ? '…' : 'Re-verify'}
+                          </button>
+                        )}
+                      </PermissionGate>
                     </div>
                   </div>
                 ))}
@@ -847,32 +871,54 @@ export function GuardianDetailPage() {
                           )}
                         </td>
                         <td className="px-5 py-3">
-                          {c.verificationStatus === 'PENDING' ? (
-                            <PermissionGate permission="admin:verification:write">
-                              <div className="flex items-center gap-1.5">
+                          <PermissionGate permission="admin:verification:write">
+                            <div className="flex items-center gap-1.5">
+                              {c.verificationStatus === 'PENDING' && (
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={certBusy === c.id + '-v' || certBusy === c.id + '-r'}
+                                    onClick={() => void handleVerifyCert(c.id)}
+                                    className="flex items-center gap-1 px-2 py-1 text-xs font-semibold text-white bg-green-500 hover:bg-green-600 disabled:opacity-50 rounded transition-colors cursor-pointer"
+                                  >
+                                    <CheckCircle2 className="w-3 h-3" />
+                                    {certBusy === c.id + '-v' ? '…' : 'Verify'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={certBusy === c.id + '-v' || certBusy === c.id + '-r'}
+                                    onClick={() => void handleRejectCert(c.id)}
+                                    className="flex items-center gap-1 px-2 py-1 text-xs font-semibold text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 disabled:opacity-50 rounded transition-colors cursor-pointer"
+                                  >
+                                    <XCircle className="w-3 h-3" />
+                                    {certBusy === c.id + '-r' ? '…' : 'Reject'}
+                                  </button>
+                                </>
+                              )}
+                              {c.verificationStatus === 'VERIFIED' && (
                                 <button
                                   type="button"
-                                  disabled={certBusy === c.id + '-v' || certBusy === c.id + '-r'}
-                                  onClick={() => void handleVerifyCert(c.id)}
-                                  className="flex items-center gap-1 px-2 py-1 text-xs font-semibold text-white bg-green-500 hover:bg-green-600 disabled:opacity-50 rounded transition-colors cursor-pointer"
-                                >
-                                  <CheckCircle2 className="w-3 h-3" />
-                                  {certBusy === c.id + '-v' ? '…' : 'Verify'}
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={certBusy === c.id + '-v' || certBusy === c.id + '-r'}
+                                  disabled={certBusy === c.id + '-r'}
                                   onClick={() => void handleRejectCert(c.id)}
                                   className="flex items-center gap-1 px-2 py-1 text-xs font-semibold text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 disabled:opacity-50 rounded transition-colors cursor-pointer"
                                 >
                                   <XCircle className="w-3 h-3" />
-                                  {certBusy === c.id + '-r' ? '…' : 'Reject'}
+                                  {certBusy === c.id + '-r' ? '…' : 'Revoke'}
                                 </button>
-                              </div>
-                            </PermissionGate>
-                          ) : (
-                            <span className="text-xs text-slate-300">—</span>
-                          )}
+                              )}
+                              {(c.verificationStatus === 'REJECTED' || c.verificationStatus === 'EXPIRED') && (
+                                <button
+                                  type="button"
+                                  disabled={certBusy === c.id + '-v'}
+                                  onClick={() => void handleVerifyCert(c.id)}
+                                  className="flex items-center gap-1 px-2 py-1 text-xs font-semibold text-white bg-green-500 hover:bg-green-600 disabled:opacity-50 rounded transition-colors cursor-pointer"
+                                >
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  {certBusy === c.id + '-v' ? '…' : 'Re-verify'}
+                                </button>
+                              )}
+                            </div>
+                          </PermissionGate>
                         </td>
                       </tr>
                     ))}

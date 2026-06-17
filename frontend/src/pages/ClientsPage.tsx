@@ -398,9 +398,9 @@ export function ClientsPage() {
                         <span>
                           <span className="font-mono font-semibold text-slate-800">{row.activeJobCount}</span> active jobs
                         </span>
-                        {row.outstandingBalance > 0 && (
-                          <span className="font-mono font-semibold text-red-500">{formatRWF(row.outstandingBalance)}</span>
-                        )}
+                        <span className={cn('font-mono font-semibold', row.outstandingBalance > 0 ? 'text-red-500' : 'text-green-600')}>
+                          {formatRWF(row.outstandingBalance)}
+                        </span>
                       </div>
                       <button
                         type="button"
@@ -421,7 +421,7 @@ export function ClientsPage() {
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-slate-100">
-                  {['Business', 'TIN', 'Category', 'District', 'Active jobs', 'Balance', 'Status', 'Actions'].map((h) => (
+                  {['Business', 'TIN', 'Category', 'District', 'Active jobs', 'Outstanding', 'Status', 'Actions'].map((h) => (
                     <th key={h} className="px-4 py-3 text-[9px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">
                       {h}
                     </th>
@@ -470,7 +470,7 @@ export function ClientsPage() {
                       <td className="px-4 py-3 font-mono text-sm font-semibold tabular-nums whitespace-nowrap">
                         {row.outstandingBalance > 0
                           ? <span className="text-red-500">{formatRWF(row.outstandingBalance)}</span>
-                          : <span className="text-slate-300">—</span>
+                          : <span className="text-green-600">{formatRWF(0)}</span>
                         }
                       </td>
                       <td className="px-4 py-3"><StatusBadge status={row.verificationStatus} /></td>
