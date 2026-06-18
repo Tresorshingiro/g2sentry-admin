@@ -99,7 +99,7 @@ export interface InvoiceDetail {
   createdAt: string;
   payments: InvoicePayment[];
   ebmReceipt: InvoiceEbmReceipt | null;
-  job: InvoiceJobDetail | null;
+  job: InvoiceJobDetail;
   disputeReason: string | null;
   disputedAt: string | null;
   statusBeforeDispute: InvoiceStatus | null;

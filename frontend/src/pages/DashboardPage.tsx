@@ -19,6 +19,10 @@ import type { ActivityItem, DashboardStats } from '@/types/job';
 import type { GuardianListItem } from '@/types/guardian-roster';
 import type { RawInvoice } from '@/types/billing';
 import { cn, formatRWF } from '@/lib/utils';
+import {
+  STATUS, HEAT_RAMP, AGING_COLORS,
+  BAR_RADIUS_V, BAR_RADIUS_H, chartTooltip, valueAxisGrid,
+} from '@/lib/chart-theme';
 
 const IBM = "'IBM Plex Sans', system-ui, sans-serif";
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -114,22 +118,13 @@ function computePeriodRange(period: ViewPeriod, cFrom: string, cTo: string): Per
   }
 }
 
-const JOB_COLORS: Record<string, string> = {
-  PATROL: '#14B87A', ESCORT: '#5DCAA5', EVENT_SECURITY: '#3B82F6',
-  DOOR_SUPERVISION: '#8B5CF6', VIP_PROTECTION: '#F59E0B',
-  EMERGENCY_RESPONSE: '#EF4444', COMPOUND_SECURITY: '#64748B', STATIC_POST: '#9CA3AF',
-};
 const JOB_LABELS: Record<string, string> = {
   PATROL: 'Patrol', ESCORT: 'Escort', EVENT_SECURITY: 'Event Security',
   DOOR_SUPERVISION: 'Door Supervision', VIP_PROTECTION: 'VIP Protection',
   EMERGENCY_RESPONSE: 'Emergency Response', COMPOUND_SECURITY: 'Compound Security', STATIC_POST: 'Static Post',
 };
 
-const TT = {
-  backgroundColor: '#0F172A', borderColor: '#1E293B',
-  padding: [8, 12] as [number, number],
-  textStyle: { color: '#F8FAFC', fontSize: 11, fontFamily: IBM },
-};
+const TT = chartTooltip;
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -374,10 +369,10 @@ export function DashboardPage() {
       tooltip: { ...TT, trigger: 'axis' as const, formatter: (p: { value: number; seriesName: string }[]) => p.map(x => `${x.seriesName}: RWF ${x.value}k`).join('<br/>') },
       legend: { top: 0, data: ['Revenue', '7-day avg'], textStyle: { color: '#94A3B8', fontSize: 10, fontFamily: IBM }, itemHeight: 8, itemWidth: 12 },
       xAxis: { type: 'category' as const, data: labels, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#94A3B8', fontSize: 9, fontFamily: IBM, interval: 4 } },
-      yAxis: { type: 'value' as const, show: false },
+      yAxis: valueAxisGrid(),
       series: [
-        { name: 'Revenue',  type: 'bar' as const,  barMaxWidth: 14, itemStyle: { color: '#14B87A', borderRadius: [2, 2, 0, 0] }, data: vals },
-        { name: '7-day avg', type: 'line' as const, smooth: true, lineStyle: { color: '#F59E0B', width: 2 }, itemStyle: { color: '#F59E0B' }, symbol: 'none', data: ma7 },
+        { name: 'Revenue',  type: 'bar' as const,  barMaxWidth: 16, itemStyle: { color: STATUS.healthy, borderRadius: BAR_RADIUS_V }, data: vals },
+        { name: '7-day avg', type: 'line' as const, smooth: true, lineStyle: { color: '#475569', width: 2 }, itemStyle: { color: '#475569' }, symbol: 'none', data: ma7 },
       ],
     };
   }, [facts30]);
@@ -394,8 +389,8 @@ export function DashboardPage() {
       grid: { left: 0, right: 0, top: 10, bottom: 0, containLabel: true },
       tooltip: { ...TT, trigger: 'axis' as const, formatter: (p: { value: number }[]) => `RWF ${p[0].value}M` },
       xAxis: { type: 'category' as const, data: labels, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#94A3B8', fontSize: 9, fontFamily: IBM } },
-      yAxis: { type: 'value' as const, show: false },
-      series: [{ type: 'bar' as const, barMaxWidth: 28, itemStyle: { color: '#14B87A', borderRadius: [3, 3, 0, 0] }, data: vals }],
+      yAxis: valueAxisGrid(),
+      series: [{ type: 'bar' as const, barMaxWidth: 30, itemStyle: { color: STATUS.healthy, borderRadius: BAR_RADIUS_V }, data: vals }],
     };
   }, [jobFacts, today]);
 
@@ -408,24 +403,10 @@ export function DashboardPage() {
       grid: { left: 0, right: 0, top: 10, bottom: 0, containLabel: true },
       tooltip: { ...TT, trigger: 'axis' as const, formatter: (p: { value: number }[]) => `RWF ${p[0].value}k` },
       xAxis: { type: 'category' as const, data: Array.from({ length: 24 }, (_, i) => `${i}h`), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#94A3B8', fontSize: 8, fontFamily: IBM } },
-      yAxis: { type: 'value' as const, show: false },
+      yAxis: valueAxisGrid(),
       series: [{ type: 'bar' as const, barMaxWidth: 18,
-        itemStyle: { color: (p: { dataIndex: number }) => { const h = p.dataIndex; return h >= 22 || h < 6 ? '#8B5CF6' : h >= 18 ? '#3B82F6' : '#14B87A'; }, borderRadius: [2, 2, 0, 0] },
+        itemStyle: { color: (p: { dataIndex: number }) => (p.dataIndex >= 22 || p.dataIndex < 6) ? STATUS.neutral : STATUS.healthy, borderRadius: BAR_RADIUS_V },
         data: vals }],
-    };
-  }, [facts30]);
-
-  // Revenue by day of week
-  const revByDowOption = useMemo(() => {
-    const dowData = Array(7).fill(0);
-    for (const r of facts30) dowData[new Date(r.date).getDay()] += Number(r.totalRevenue ?? 0);
-    const vals = DOW.map((_, i) => Math.round(dowData[i] / 1000));
-    return {
-      grid: { left: 0, right: 0, top: 10, bottom: 0, containLabel: true },
-      tooltip: { ...TT, trigger: 'axis' as const, formatter: (p: { value: number }[]) => `RWF ${p[0].value}k` },
-      xAxis: { type: 'category' as const, data: DOW, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#94A3B8', fontSize: 10, fontFamily: IBM } },
-      yAxis: { type: 'value' as const, show: false },
-      series: [{ type: 'bar' as const, barMaxWidth: 32, itemStyle: { color: '#3B82F6', borderRadius: [3, 3, 0, 0] }, data: vals }],
     };
   }, [facts30]);
 
@@ -440,10 +421,10 @@ export function DashboardPage() {
       tooltip: { ...TT, trigger: 'axis' as const },
       legend: { top: 0, data: ['Jobs', 'Completed'], textStyle: { color: '#94A3B8', fontSize: 10, fontFamily: IBM }, itemHeight: 8, itemWidth: 12 },
       xAxis: { type: 'category' as const, data: labels, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#94A3B8', fontSize: 9, fontFamily: IBM, interval: 4 } },
-      yAxis: { type: 'value' as const, show: false },
+      yAxis: valueAxisGrid(),
       series: [
-        { name: 'Jobs',      type: 'bar' as const, barMaxWidth: 14, itemStyle: { color: '#3B82F6', borderRadius: [2, 2, 0, 0] }, data: days.map(d => m.get(d)?.jobs ?? 0) },
-        { name: 'Completed', type: 'bar' as const, barMaxWidth: 14, itemStyle: { color: '#14B87A', borderRadius: [2, 2, 0, 0] }, data: days.map(d => m.get(d)?.completed ?? 0) },
+        { name: 'Jobs',      type: 'bar' as const, barMaxWidth: 14, itemStyle: { color: STATUS.info, borderRadius: BAR_RADIUS_V }, data: days.map(d => m.get(d)?.jobs ?? 0) },
+        { name: 'Completed', type: 'bar' as const, barMaxWidth: 14, itemStyle: { color: STATUS.healthy, borderRadius: BAR_RADIUS_V }, data: days.map(d => m.get(d)?.completed ?? 0) },
       ],
     };
   }, [facts30]);
@@ -460,8 +441,8 @@ export function DashboardPage() {
       tooltip: { ...TT, formatter: (p: { data: [number, number, number] }) => `${DOW[p.data[1]]} ${p.data[0]}:00 — ${p.data[2]} jobs` },
       xAxis: { type: 'category' as const, data: Array.from({ length: 24 }, (_, i) => `${i}h`), axisLine: { show: false }, axisTick: { show: false }, splitArea: { show: true }, axisLabel: { fontSize: 8, color: '#94A3B8' } },
       yAxis: { type: 'category' as const, data: DOW, axisLine: { show: false }, axisTick: { show: false }, splitArea: { show: true }, axisLabel: { fontSize: 10, color: '#64748B' } },
-      visualMap: { show: false, min: 0, max: maxVal, inRange: { color: ['#F0FDF4', '#14B87A'] } },
-      series: [{ type: 'heatmap' as const, data, itemStyle: { borderRadius: 2 } }],
+      visualMap: { show: false, min: 0, max: maxVal, inRange: { color: [...HEAT_RAMP] } },
+      series: [{ type: 'heatmap' as const, data, itemStyle: { borderRadius: 3, borderColor: '#fff', borderWidth: 2 } }],
     };
   }, [facts30]);
 
@@ -474,30 +455,35 @@ export function DashboardPage() {
     return {
       grid: { left: 10, right: 60, top: 8, bottom: 8, containLabel: true },
       tooltip: { ...TT, trigger: 'axis' as const, formatter: (p: { name: string; value: number }[]) => `${p[0].name}: ${formatRWF(p[0].value * 1000)}` },
-      xAxis: { type: 'value' as const, show: false },
+      xAxis: valueAxisGrid(),
       yAxis: { type: 'category' as const, data: sorted.map(([d]) => d), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#64748B', fontSize: 11, fontFamily: IBM } },
-      series: [{ type: 'bar' as const, barMaxWidth: 20, itemStyle: { color: '#14B87A', borderRadius: [0, 4, 4, 0] }, label: { show: true, position: 'right' as const, color: '#475569', fontSize: 10, formatter: (p: { value: number }) => `${p.value}k` }, data: sorted.map(([, v]) => Math.round(v / 1000)) }],
+      series: [{ type: 'bar' as const, barMaxWidth: 20, itemStyle: { color: STATUS.healthy, borderRadius: BAR_RADIUS_H }, label: { show: true, position: 'right' as const, color: '#475569', fontSize: 10, formatter: (p: { value: number }) => `${p.value}k` }, data: sorted.map(([, v]) => Math.round(v / 1000)) }],
     };
   }, [facts30]);
 
-  // Job type donut
+  // Job type ranked bar — one dominant category + a long tail, so a ranked list
+  // reads far better than a donut (matches the Dispatch Failure Reasons pattern).
   const jobTypeOption = useMemo(() => {
     const m = new Map<string, number>();
     for (const r of facts30) m.set(r.jobType, (m.get(r.jobType) ?? 0) + r.jobCount);
     const total = Array.from(m.values()).reduce((s, v) => s + v, 0);
     if (!total) return null;
+    const sorted = Array.from(m.entries())
+      .map(([t, v]) => ({ label: JOB_LABELS[t] ?? t, count: v, pct: Math.round((v / total) * 100) }))
+      .sort((a, b) => a.count - b.count)
+      .slice(-7);
     return {
-      tooltip: { ...TT, trigger: 'item' as const, formatter: '{b}: {d}%' },
-      series: [{ type: 'pie' as const, radius: ['50%', '72%'], avoidLabelOverlap: false, label: { show: false }, emphasis: { scale: false }, data: Array.from(m.entries()).map(([t, v]) => ({ value: v, name: JOB_LABELS[t] ?? t, itemStyle: { color: JOB_COLORS[t] ?? '#9CA3AF' } })) }],
+      grid: { left: 10, right: 48, top: 8, bottom: 8, containLabel: true },
+      tooltip: { ...TT, trigger: 'axis' as const, formatter: (p: { name: string; value: number }[]) => `${p[0].name}: ${p[0].value} jobs` },
+      xAxis: valueAxisGrid(),
+      yAxis: { type: 'category' as const, data: sorted.map(s => s.label), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#64748B', fontSize: 11, fontFamily: IBM } },
+      series: [{
+        type: 'bar' as const, barMaxWidth: 20,
+        itemStyle: { color: STATUS.healthy, borderRadius: BAR_RADIUS_H },
+        label: { show: true, position: 'right' as const, color: '#475569', fontSize: 10, formatter: (p: { data: number }) => String(p.data) },
+        data: sorted.map(s => s.count),
+      }],
     };
-  }, [facts30]);
-
-  const jobTypeList = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const r of facts30) m.set(r.jobType, (m.get(r.jobType) ?? 0) + r.jobCount);
-    const total = Array.from(m.values()).reduce((s, v) => s + v, 0);
-    return Array.from(m.entries()).sort((a, b) => b[1] - a[1]).slice(0, 6)
-      .map(([t, v]) => ({ label: JOB_LABELS[t] ?? t, color: JOB_COLORS[t] ?? '#9CA3AF', pct: total > 0 ? Math.round((v / total) * 100) : 0 }));
   }, [facts30]);
 
   // Dispatch failure reasons
@@ -507,9 +493,9 @@ export function DashboardPage() {
     return {
       grid: { left: 10, right: 40, top: 8, bottom: 8, containLabel: true },
       tooltip: { ...TT, trigger: 'axis' as const },
-      xAxis: { type: 'value' as const, show: false },
+      xAxis: valueAxisGrid(),
       yAxis: { type: 'category' as const, data: sorted.map(r => r.reason.replace(/_/g, ' ')), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#64748B', fontSize: 10, fontFamily: IBM } },
-      series: [{ type: 'bar' as const, barMaxWidth: 20, itemStyle: { color: '#EF4444', borderRadius: [0, 4, 4, 0] }, label: { show: true, position: 'right' as const, color: '#475569', fontSize: 10 }, data: sorted.map(r => r.count) }],
+      series: [{ type: 'bar' as const, barMaxWidth: 20, itemStyle: { color: STATUS.danger, borderRadius: BAR_RADIUS_H }, label: { show: true, position: 'right' as const, color: '#475569', fontSize: 10 }, data: sorted.map(r => r.count) }],
     };
   }, [kpis]);
 
@@ -522,20 +508,6 @@ export function DashboardPage() {
     return { text: `${diff >= 0 ? '+' : '-'}${fv} (${diff >= 0 ? '+' : ''}${pct}%) vs prev`, trend: (diff >= 0 ? 'up' : 'down') as 'up' | 'down' };
   }
 
-  const ACTION_ITEMS = [
-    { label: 'Replacement requests', desc: 'Guardians requesting replacement on active jobs', count: pendingReplace,
-      icon: RefreshCcw, path: '/replacement-requests', iconBg: 'bg-amber-50 border-amber-100', iconColor: 'text-amber-500', pill: 'bg-amber-100 text-amber-700' },
-    { label: 'Organization verifications', desc: 'Client organizations awaiting review', count: stats?.pendingOrgVerifications ?? 0,
-      icon: Building2, path: '/verifications', iconBg: 'bg-blue-50 border-blue-100', iconColor: 'text-blue-500', pill: 'bg-blue-100 text-blue-700' },
-    { label: 'Guardian verifications', desc: 'Guardian profiles awaiting review', count: stats?.pendingGuardianVerifications ?? 0,
-      icon: Shield, path: '/verifications', iconBg: 'bg-purple-50 border-purple-100', iconColor: 'text-purple-500', pill: 'bg-purple-100 text-purple-700' },
-    { label: 'Disputed invoices', desc: 'Invoice value frozen in dispute', count: invoicesDisputed.length,
-      icon: AlertTriangle, path: '/billing', iconBg: 'bg-red-50 border-red-100', iconColor: 'text-red-500', pill: 'bg-red-100 text-red-700' },
-    { label: 'Overdue invoices', desc: 'Payment past due date', count: invoicesOverdue.length,
-      icon: FileText, path: '/billing', iconBg: 'bg-red-50 border-red-100', iconColor: 'text-red-500', pill: 'bg-red-100 text-red-700' },
-  ];
-  const pendingActions = ACTION_ITEMS.filter(a => a.count > 0);
-  const totalPending   = pendingActions.reduce((s, a) => s + a.count, 0);
 
   const QUICK_ACTIONS = [
     { label: 'Replacement Requests', icon: RefreshCcw, path: '/replacement-requests', badge: pendingReplace > 0 ? pendingReplace : undefined },
@@ -567,47 +539,6 @@ export function DashboardPage() {
           <KpiPill label="Replacements Pending" value={loading ? '—' : String(pendingReplace)}                                           loading={loading} />
           <KpiPill label="Revenue Today"        value={loading ? '—' : formatRWF(revToday)}                                              loading={loading} />
           <KpiPill label="Overdue Invoices"     value={loading ? '—' : String(invoicesOverdue.length)}                                   loading={loading} />
-        </div>
-
-        {/* ── Needs attention ── */}
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-bold text-slate-900">Needs Attention</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">Pending items requiring admin action</p>
-            </div>
-            {!loading && totalPending > 0 && (
-              <span className="bg-amber-500 text-white font-mono text-[10px] font-bold px-2 py-0.5 rounded-full">{totalPending}</span>
-            )}
-          </div>
-          {loading ? (
-            <div className="p-4 space-y-2">
-              <Skel className="h-10 w-full" />
-              <Skel className="h-10 w-full" />
-            </div>
-          ) : pendingActions.length > 0 ? (
-            <div className="divide-y divide-slate-100">
-              {pendingActions.map(a => (
-                <button key={a.label} type="button" onClick={() => navigate(a.path)}
-                  className="flex items-center gap-3 w-full px-5 py-3 hover:bg-slate-50 cursor-pointer text-left transition-colors">
-                  <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center border shrink-0', a.iconBg)}>
-                    <a.icon className={cn('w-4 h-4', a.iconColor)} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-slate-800">{a.label}</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5 truncate">{a.desc}</p>
-                  </div>
-                  <span className={cn('font-mono text-xs font-bold px-2 py-0.5 rounded-full shrink-0', a.pill)}>{a.count}</span>
-                  <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="flex items-center gap-2.5 px-5 py-4">
-              <CheckCircle className="w-4 h-4 text-[#14B87A] shrink-0" />
-              <p className="text-xs text-slate-500">All clear — nothing requires your attention right now.</p>
-            </div>
-          )}
         </div>
 
         {/* ── Period filter ── */}
@@ -734,12 +665,11 @@ export function DashboardPage() {
             <ChartCard title="Monthly Revenue" subtitle="Last 12 months in RWF millions">
               <ReactECharts option={monthlyRevOption} style={{ height: 180 }} />
             </ChartCard>
-            <ChartCard title="Revenue by Hour of Day" subtitle="Which hours generate the most billing — green = day, blue = evening, purple = night">
-              <ReactECharts option={revByHourOption} style={{ height: 140 }} />
-            </ChartCard>
-            <ChartCard title="Revenue by Day of Week" subtitle="Peak booking days — useful for staffing decisions">
-              <ReactECharts option={revByDowOption} style={{ height: 140 }} />
-            </ChartCard>
+            <div className="lg:col-span-2">
+              <ChartCard title="Revenue by Hour of Day" subtitle="When billing is generated — green = working hours, grey = overnight (22:00–06:00)">
+                <ReactECharts option={revByHourOption} style={{ height: 160 }} />
+              </ChartCard>
+            </div>
           </div>
         </Section>
 
@@ -750,21 +680,10 @@ export function DashboardPage() {
             <ChartCard title="Daily Job Volume" subtitle="Jobs created vs completed per day">
               {facts30.length > 0 ? <ReactECharts option={jobVolOption} style={{ height: 180 }} /> : <div className="h-[180px] flex items-center justify-center text-xs text-slate-400">No data</div>}
             </ChartCard>
-            <ChartCard title="Job Type Breakdown" subtitle="Distribution of service types">
+            <ChartCard title="Job Type Breakdown" subtitle="Jobs by service type — ranked">
               {jobTypeOption
-                ? <div className="flex items-center gap-6 pt-2">
-                    <ReactECharts option={jobTypeOption} style={{ width: 120, height: 120 }} />
-                    <div className="flex flex-col gap-2 flex-1">
-                      {jobTypeList.map(j => (
-                        <div key={j.label} className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: j.color }} />
-                          <span className="text-[11px] text-slate-600 flex-1 truncate">{j.label}</span>
-                          <span className="font-mono text-[10px] font-semibold text-slate-600 tabular-nums">{j.pct}%</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                : <div className="h-[120px] flex items-center justify-center text-xs text-slate-400">No data</div>
+                ? <ReactECharts option={jobTypeOption} style={{ height: 200 }} />
+                : <div className="h-[200px] flex items-center justify-center text-xs text-slate-400">No data</div>
               }
             </ChartCard>
             <ChartCard title="Jobs by District (Revenue)" subtitle="Top districts by total revenue">
@@ -780,42 +699,60 @@ export function DashboardPage() {
         <Section icon={FileText} iconBg="bg-slate-50 border-slate-200" iconColor="text-slate-500"
           title="Invoice Pipeline" subtitle="Invoice status breakdown and aging"
           action="View Billing" onAction={() => navigate('/billing')}>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
+          <div className="bg-white border border-slate-200 rounded-xl mb-4 grid grid-cols-2 sm:grid-cols-5 divide-x divide-slate-100">
             {[
-              { label: 'Draft', count: invoicesDraft.length, value: draftValue, color: 'text-slate-500', bg: 'bg-slate-50 border-slate-200' },
-              { label: 'Issued', count: invoicesIssued.length, value: invoicesIssued.reduce((s, i) => s + Number(i.total), 0), color: 'text-blue-600', bg: 'bg-blue-50 border-blue-100' },
-              { label: 'Overdue', count: invoicesOverdue.length, value: invoicesOverdue.reduce((s, i) => s + Number(i.total), 0), color: 'text-red-600', bg: 'bg-red-50 border-red-100' },
-              { label: 'Disputed', count: invoicesDisputed.length, value: disputedVal, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-100' },
-              { label: 'Paid', count: invoicesPaid.length, value: paidValue, color: 'text-[#14B87A]', bg: 'bg-emerald-50 border-emerald-100' },
-            ].map(({ label, count, value, color, bg }) => (
-              <div key={label} className={cn('rounded-xl border p-4', bg)}>
-                <p className={cn('text-[10px] font-bold uppercase tracking-widest', color)}>{label}</p>
-                <p className={cn('font-mono text-xl font-bold mt-1', color)}>{count}</p>
-                <p className="text-[10px] text-slate-500 mt-0.5 font-mono">{formatRWF(value)}</p>
+              { label: 'Draft', count: invoicesDraft.length, value: draftValue, color: 'text-slate-600' },
+              { label: 'Issued', count: invoicesIssued.length, value: invoicesIssued.reduce((s, i) => s + Number(i.total), 0), color: 'text-blue-600' },
+              { label: 'Overdue', count: invoicesOverdue.length, value: invoicesOverdue.reduce((s, i) => s + Number(i.total), 0), color: 'text-red-600' },
+              { label: 'Disputed', count: invoicesDisputed.length, value: disputedVal, color: 'text-amber-600' },
+              { label: 'Paid', count: invoicesPaid.length, value: paidValue, color: 'text-[#14B87A]' },
+            ].map(({ label, count, value, color }) => (
+              <div key={label} className="px-4 py-3.5">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{label}</p>
+                <p className={cn('font-mono text-xl font-bold mt-1 tabular-nums', color)}>{count}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5 font-mono tabular-nums">{formatRWF(value)}</p>
               </div>
             ))}
           </div>
-          {/* Aging buckets */}
-          <div className="bg-white border border-slate-200 rounded-xl p-4">
-            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-3">Outstanding aging</p>
-            <div className="grid grid-cols-4 gap-3">
-              {Object.entries(aging.counts).map(([bucket, count]) => {
-                const pct = (invoicesIssued.length + invoicesOverdue.length) > 0
-                  ? Math.round(count / (invoicesIssued.length + invoicesOverdue.length) * 100) : 0;
-                const isRed = bucket === '30d+';
-                return (
-                  <div key={bucket}>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{bucket}</p>
-                    <p className={cn('font-mono text-lg font-bold mt-0.5', isRed ? 'text-red-500' : 'text-slate-800')}>{count}</p>
-                    <p className="text-[10px] text-slate-400 font-mono">{formatRWF(aging.values[bucket as keyof typeof aging.values])}</p>
-                    <div className="mt-1.5 h-1 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: isRed ? '#EF4444' : '#14B87A' }} />
+          {/* Aging — single stacked bar, segments sized by outstanding amount */}
+          {(() => {
+            const buckets = ['0–7d', '8–14d', '15–30d', '30d+'] as const;
+            const totalVal   = buckets.reduce((s, b) => s + aging.values[b], 0);
+            const totalCount = buckets.reduce((s, b) => s + aging.counts[b], 0);
+            return (
+              <div className="bg-white border border-slate-200 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Outstanding aging</p>
+                  <p className="text-[11px] text-slate-400 font-mono tabular-nums">{totalCount} invoices · {formatRWF(totalVal)}</p>
+                </div>
+                {totalVal > 0 ? (
+                  <>
+                    <div className="flex h-3 w-full rounded-full overflow-hidden bg-slate-100">
+                      {buckets.map((b, i) => {
+                        const pct = (aging.values[b] / totalVal) * 100;
+                        if (pct <= 0) return null;
+                        return <div key={b} style={{ width: `${pct}%`, backgroundColor: AGING_COLORS[i] }} title={`${b}: ${formatRWF(aging.values[b])}`} />;
+                      })}
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+                      {buckets.map((b, i) => (
+                        <div key={b} className="flex items-start gap-2">
+                          <span className="w-2.5 h-2.5 rounded-sm mt-0.5 shrink-0" style={{ backgroundColor: AGING_COLORS[i] }} />
+                          <div>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{b}</p>
+                            <p className="font-mono text-sm font-bold text-slate-800 tabular-nums mt-0.5">{aging.counts[b]}</p>
+                            <p className="text-[10px] text-slate-400 font-mono tabular-nums">{formatRWF(aging.values[b])}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="py-6 text-center text-xs text-slate-400">No outstanding invoices</div>
+                )}
+              </div>
+            );
+          })()}
         </Section>
 
         {/* ── Dispatch failures ── */}

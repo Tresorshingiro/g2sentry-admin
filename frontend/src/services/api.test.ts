@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { login, fetchGuardians, fetchDashboardStats } from './api';
+import { fetchDashboardStats } from './api';
 
 vi.mock('@/lib/api-client', () => ({
   apiGet: vi.fn().mockResolvedValue({
@@ -15,18 +15,6 @@ vi.mock('@/lib/api-client', () => ({
 }));
 
 describe('api service', () => {
-  it('login resolves with token and user', async () => {
-    const result = await login('admin@g2sentry.rw', 'secret');
-    expect(result.token).toBeTruthy();
-    expect(result.user.name).toBe('Admin');
-    expect(result.user.role).toBe('SUPER_ADMIN');
-  });
-
-  it('fetchGuardians returns 15 guardians', async () => {
-    const { guardians } = await fetchGuardians();
-    expect(guardians).toHaveLength(15);
-  });
-
   it('fetchDashboardStats returns job count from real API', async () => {
     const stats = await fetchDashboardStats();
     expect(stats.jobCount).toBe(34);

@@ -25,6 +25,7 @@ import { VerificationsPage } from '@/pages/VerificationsPage';
 import { IncidentsPage } from '@/pages/IncidentsPage';
 import { PayoutsPage } from '@/pages/PayoutsPage';
 import { ReplacementRequestsPage } from '@/pages/ReplacementRequestsPage';
+import { NotificationsPage } from '@/pages/NotificationsPage';
 
 export default function App() {
   return (
@@ -257,6 +258,17 @@ export default function App() {
           <ProtectedRoute>
             <AppLayout>
               <SettingsPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/notifications"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <NotificationsPage />
             </AppLayout>
           </ProtectedRoute>
         }

@@ -1,5 +1,6 @@
 import {
   BarChart2,
+  Bell,
   Briefcase,
   Building2,
   CheckSquare,
@@ -81,9 +82,10 @@ const nav: NavGroup[] = [
   {
     section: 'System',
     items: [
-      { label: 'Analytics', icon: BarChart2,  path: '/analytics', permission: 'admin:analytics:read' },
-      { label: 'Audit Log', icon: ScrollText, path: '/audit',     permission: 'admin:audit:read' },
-      { label: 'Settings',  icon: Settings,   path: '/settings' },
+      { label: 'Analytics',      icon: BarChart2,  path: '/analytics',     permission: 'admin:analytics:read' },
+      { label: 'Audit Log',      icon: ScrollText, path: '/audit',         permission: 'admin:audit:read' },
+      { label: 'Notifications',  icon: Bell,       path: '/notifications', permission: 'notifications:read' },
+      { label: 'Settings',       icon: Settings,   path: '/settings' },
     ],
   },
 ];

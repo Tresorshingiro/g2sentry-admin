@@ -11,6 +11,9 @@ import { fetchJobFactsDaily, fetchGuardianPerfDaily } from '@/services/api/analy
 import type { RawJobFactsDaily } from '@/services/api/analytics';
 import type { DashboardStats } from '@/types/job';
 import { cn, formatRWF } from '@/lib/utils';
+import {
+  STATUS, CATEGORICAL, BAR_RADIUS_V, BAR_RADIUS_H, chartTooltip, valueAxisGrid,
+} from '@/lib/chart-theme';
 
 const IBM = "'IBM Plex Sans', system-ui, sans-serif";
 
@@ -194,11 +197,7 @@ const CMP_ROWS: { key: keyof PeriodSummary; label: string; fmt: (v: number) => s
   { key: 'noShows',         label: 'Guardian no-shows',  fmt: v => String(Math.round(v)), lowerIsBetter: true },
 ];
 
-const TT = {
-  backgroundColor: '#0F172A', borderColor: '#1E293B',
-  padding: [8, 12] as [number, number],
-  textStyle: { color: '#F8FAFC', fontSize: 11, fontFamily: IBM },
-};
+const TT = chartTooltip;
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -277,22 +276,6 @@ function KpiCard({ label, value, sub, icon: Icon, iconBg, iconColor, trend, load
           <Icon className={cn('w-4 h-4', iconColor)} />
         </div>
       </div>
-    </div>
-  );
-}
-
-// ─── Funnel bar ───────────────────────────────────────────────────────────────
-
-function FunnelRow({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
-  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
-  return (
-    <div className="flex items-center gap-3">
-      <p className="text-xs text-slate-500 w-40 shrink-0 truncate">{label}</p>
-      <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
-      </div>
-      <span className="font-mono text-xs font-semibold text-slate-700 w-14 text-right tabular-nums">{value}</span>
-      <span className="font-mono text-[11px] text-slate-400 w-10 text-right tabular-nums">{pct}%</span>
     </div>
   );
 }
@@ -384,10 +367,10 @@ export function AnalyticsPage() {
       tooltip: { ...TT, trigger: 'axis' as const, formatter: (p: { value: number; seriesName: string }[]) => p.map(x => `${x.seriesName}: RWF ${x.value}k`).join('<br/>') },
       legend: { top: 0, data: ['Revenue', '7-day avg'], textStyle: { color: '#94A3B8', fontSize: 10, fontFamily: IBM }, itemHeight: 8, itemWidth: 12 },
       xAxis: { type: 'category' as const, data: labels, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#94A3B8', fontSize: 9, fontFamily: IBM, interval } },
-      yAxis: { type: 'value' as const, show: false },
+      yAxis: valueAxisGrid(),
       series: [
-        { name: 'Revenue', type: 'bar' as const, barMaxWidth: 16, itemStyle: { color: '#14B87A', borderRadius: [2, 2, 0, 0] }, data: vals },
-        { name: '7-day avg', type: 'line' as const, smooth: true, lineStyle: { color: '#F59E0B', width: 2 }, itemStyle: { color: '#F59E0B' }, symbol: 'none', data: ma7 },
+        { name: 'Revenue', type: 'bar' as const, barMaxWidth: 16, itemStyle: { color: STATUS.healthy, borderRadius: BAR_RADIUS_V }, data: vals },
+        { name: '7-day avg', type: 'line' as const, smooth: true, lineStyle: { color: '#475569', width: 2 }, itemStyle: { color: '#475569' }, symbol: 'none', data: ma7 },
       ],
     };
   }, [facts, periodDays]);
@@ -402,9 +385,9 @@ export function AnalyticsPage() {
     return {
       grid: { left: 10, right: 60, top: 8, bottom: 8, containLabel: true },
       tooltip: { ...TT, trigger: 'axis' as const, formatter: (p: { name: string; value: number }[]) => `${p[0].name}: ${formatRWF(p[0].value * 1000)}` },
-      xAxis: { type: 'value' as const, show: false },
+      xAxis: valueAxisGrid(),
       yAxis: { type: 'category' as const, data: sorted.map(([d]) => d), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#64748B', fontSize: 11, fontFamily: IBM } },
-      series: [{ type: 'bar' as const, barMaxWidth: 20, itemStyle: { color: '#14B87A', borderRadius: [0, 4, 4, 0] }, label: { show: true, position: 'right' as const, color: '#475569', fontSize: 10, formatter: (p: { value: number }) => `${p.value}k` }, data: sorted.map(([, v]) => Math.round(v / 1000)) }],
+      series: [{ type: 'bar' as const, barMaxWidth: 20, itemStyle: { color: STATUS.healthy, borderRadius: BAR_RADIUS_H }, label: { show: true, position: 'right' as const, color: '#475569', fontSize: 10, formatter: (p: { value: number }) => `${p.value}k` }, data: sorted.map(([, v]) => Math.round(v / 1000)) }],
     };
   }, [facts]);
 
@@ -469,6 +452,35 @@ export function AnalyticsPage() {
       }],
     };
   }, [geoNames, districtStats, mapMetric]);
+
+  // ── Dispatch funnel — only the genuinely sequential, narrowing stages.
+  //    (Expired / Failed are side outcomes, not funnel steps — shown separately.)
+  const funnelOption = useMemo(() => {
+    if (!kpis) return null;
+    const stages = [
+      { name: 'Jobs Created',    value: kpis.jobsCreated },
+      { name: 'Offers Sent',     value: kpis.totalOffers },
+      { name: 'Offers Accepted', value: kpis.acceptedOffers },
+      { name: 'With Guardian',   value: kpis.jobsWithAcceptedOffer },
+    ];
+    const max = Math.max(kpis.jobsCreated, 1);
+    return {
+      tooltip: { ...TT, trigger: 'item' as const, formatter: (p: { name: string; value: number }) => `${p.name}: ${p.value} (${Math.round((p.value / max) * 100)}%)` },
+      series: [{
+        type: 'funnel' as const,
+        left: 0, right: 0, top: 4, bottom: 4,
+        min: 0, max,
+        minSize: '26%', maxSize: '100%',
+        sort: 'descending' as const,
+        gap: 3,
+        label: { show: true, position: 'inside' as const, color: '#fff', fontSize: 11, fontFamily: IBM, formatter: (p: { name: string; value: number }) => `${p.name}  ${p.value}` },
+        labelLine: { show: false },
+        itemStyle: { borderColor: '#fff', borderWidth: 2 },
+        emphasis: { label: { fontSize: 12 } },
+        data: stages.map((s, i) => ({ value: s.value, name: s.name, itemStyle: { color: CATEGORICAL[i] } })),
+      }],
+    };
+  }, [kpis]);
 
   // ── Period comparison ────────────────────────────────────────────────────
   const cmp = useMemo(() => {
@@ -709,43 +721,71 @@ export function AnalyticsPage() {
               {/* Funnel */}
               <div className="bg-white border border-slate-200 rounded-xl p-5">
                 <p className="text-xs font-bold text-slate-700 mb-0.5">Dispatch Funnel</p>
-                <p className="text-[11px] text-slate-400 mb-4">From job creation to completion</p>
-                <div className="space-y-3">
-                  <FunnelRow label="Jobs Created"        value={kpis.jobsCreated}            max={kpis.jobsCreated} color="#3B82F6" />
-                  <FunnelRow label="Offers Sent"         value={kpis.totalOffers}             max={kpis.jobsCreated} color="#8B5CF6" />
-                  <FunnelRow label="Offers Accepted"     value={kpis.acceptedOffers}          max={kpis.jobsCreated} color="#14B87A" />
-                  <FunnelRow label="Jobs with Guardian"  value={kpis.jobsWithAcceptedOffer}   max={kpis.jobsCreated} color="#14B87A" />
-                  <FunnelRow label="Offers Expired"      value={kpis.expiredOffers}           max={kpis.jobsCreated} color="#F59E0B" />
-                  <FunnelRow label="Jobs Failed"         value={kpis.jobsFailed}              max={kpis.jobsCreated} color="#EF4444" />
+                <p className="text-[11px] text-slate-400 mb-3">Sequential conversion — job creation to guardian on the job</p>
+                {funnelOption
+                  ? <ReactECharts option={funnelOption} style={{ height: 220 }} />
+                  : <div className="h-[220px] flex items-center justify-center text-xs text-slate-400">No data</div>
+                }
+                {/* Side outcomes — deliberately not funnel stages */}
+                <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-slate-100">
+                  <div className="flex items-center justify-between rounded-lg px-3 py-2.5 bg-amber-50 border border-amber-100">
+                    <span className="text-[11px] font-semibold text-amber-700">Offers Expired</span>
+                    <span className="font-mono text-base font-bold text-amber-700 tabular-nums">{kpis.expiredOffers}</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg px-3 py-2.5 bg-red-50 border border-red-100">
+                    <span className="text-[11px] font-semibold text-red-700">Jobs Failed</span>
+                    <span className="font-mono text-base font-bold text-red-700 tabular-nums">{kpis.jobsFailed}</span>
+                  </div>
                 </div>
               </div>
 
               {/* Latency breakdown */}
               <div className="bg-white border border-slate-200 rounded-xl p-5">
-                <p className="text-xs font-bold text-slate-700 mb-0.5">Latency Breakdown</p>
-                <p className="text-[11px] text-slate-400 mb-4">P50 and P95 response times per stage</p>
-                <div className="space-y-4">
-                  {[
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <p className="text-xs font-bold text-slate-700 mb-0.5">Latency Breakdown</p>
+                    <p className="text-[11px] text-slate-400">P50 → P95 spread per stage (minutes)</p>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="flex items-center gap-1 text-[10px] text-slate-500"><span className="w-2 h-2 rounded-full bg-[#14B87A]" /> P50</span>
+                    <span className="flex items-center gap-1 text-[10px] text-slate-500"><span className="w-2 h-2 rounded-full bg-amber-500" /> P95</span>
+                  </div>
+                </div>
+                {(() => {
+                  const stages = [
                     { label: 'Time to First Offer', p50: kpis.latencyMinutes.p50TimeToFirstOffer, p95: kpis.latencyMinutes.p95TimeToFirstOffer },
                     { label: 'Time to Accept',       p50: kpis.latencyMinutes.p50TimeToAccept,     p95: kpis.latencyMinutes.p95TimeToAccept },
                     { label: 'Time to On-site',      p50: kpis.latencyMinutes.p50TimeToOnSite,     p95: kpis.latencyMinutes.p95TimeToOnSite },
                     { label: 'Time to Complete',     p50: kpis.latencyMinutes.p50TimeToComplete,   p95: kpis.latencyMinutes.p95TimeToComplete },
-                  ].map(({ label, p50, p95 }) => (
-                    <div key={label}>
-                      <div className="flex items-center justify-between mb-1">
-                        <p className="text-xs text-slate-500">{label}</p>
-                        <div className="flex gap-3">
-                          <span className="text-[11px] font-mono"><span className="text-slate-400">P50 </span><span className="font-semibold text-slate-700">{p50.toFixed(1)}m</span></span>
-                          <span className="text-[11px] font-mono"><span className="text-slate-400">P95 </span><span className="font-semibold text-slate-700">{p95.toFixed(1)}m</span></span>
-                        </div>
-                      </div>
-                      <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden relative">
-                        <div className="h-full bg-[#14B87A]/30 rounded-full" style={{ width: '100%' }} />
-                        <div className="h-full bg-[#14B87A] rounded-full absolute top-0 left-0" style={{ width: `${Math.min((p50 / p95) * 100, 100)}%` }} />
-                      </div>
+                  ];
+                  const scale = Math.max(...stages.map(s => s.p95), 1);
+                  return (
+                    <div className="space-y-5">
+                      {stages.map(({ label, p50, p95 }) => {
+                        const l50 = (p50 / scale) * 100;
+                        const l95 = (p95 / scale) * 100;
+                        const lo = Math.min(l50, l95), hi = Math.max(l50, l95);
+                        return (
+                          <div key={label}>
+                            <div className="flex items-center justify-between mb-2">
+                              <p className="text-xs text-slate-500">{label}</p>
+                              <div className="flex gap-3">
+                                <span className="text-[11px] font-mono tabular-nums"><span className="text-slate-400">P50 </span><span className="font-semibold text-[#14B87A]">{p50.toFixed(1)}m</span></span>
+                                <span className="text-[11px] font-mono tabular-nums"><span className="text-slate-400">P95 </span><span className="font-semibold text-amber-600">{p95.toFixed(1)}m</span></span>
+                              </div>
+                            </div>
+                            <div className="relative h-3">
+                              <div className="absolute top-1/2 left-0 right-0 h-px bg-slate-100" />
+                              <div className="absolute top-1/2 h-0.5 -translate-y-1/2 bg-slate-300 rounded-full" style={{ left: `${lo}%`, width: `${hi - lo}%` }} />
+                              <div className="absolute top-1/2 w-2.5 h-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#14B87A] ring-2 ring-white" style={{ left: `${l50}%` }} title={`P50 ${p50.toFixed(1)}m`} />
+                              <div className="absolute top-1/2 w-2.5 h-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-500 ring-2 ring-white" style={{ left: `${l95}%` }} title={`P95 ${p95.toFixed(1)}m`} />
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))}
-                </div>
+                  );
+                })()}
 
                 {/* Rate pills */}
                 <div className="grid grid-cols-2 gap-2 mt-5">
