@@ -19,15 +19,19 @@ import type { BillingPolicy, BillingPolicyModel, PricingModel, PricingRule } fro
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const JOB_TYPES = [
-  'PATROL', 'ESCORT', 'EVENT_SECURITY', 'DOOR_SUPERVISION',
-  'VIP_PROTECTION', 'EMERGENCY_RESPONSE', 'COMPOUND_SECURITY', 'STATIC_POST',
+  'STANDARD_GUARDIAN', 'CORPORATE_GUARDIAN', 'EVENT_GUARDIAN',
+  'CHILD_ESCORT_GUARDIAN', 'MEDICAL_ESCORT_GUARDIAN',
+  'EXECUTIVE_VIP_GUARDIAN', 'ARMED_GUARDIAN',
 ];
 
 const JOB_TYPE_LABELS: Record<string, string> = {
-  PATROL: 'Patrol', ESCORT: 'Escort', EVENT_SECURITY: 'Event Security',
-  DOOR_SUPERVISION: 'Door Supervision', VIP_PROTECTION: 'VIP Protection',
-  EMERGENCY_RESPONSE: 'Emergency Response', COMPOUND_SECURITY: 'Compound Security',
-  STATIC_POST: 'Static Post',
+  STANDARD_GUARDIAN: 'Standard Guardian',
+  CORPORATE_GUARDIAN: 'Corporate Guardian',
+  EVENT_GUARDIAN: 'Event Guardian',
+  CHILD_ESCORT_GUARDIAN: 'Child Escort Guardian',
+  MEDICAL_ESCORT_GUARDIAN: 'Medical Escort Guardian',
+  EXECUTIVE_VIP_GUARDIAN: 'Executive / VIP Guardian',
+  ARMED_GUARDIAN: 'Armed Guardian',
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

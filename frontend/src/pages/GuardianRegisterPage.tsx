@@ -11,11 +11,12 @@ import {
   User,
   X,
 } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { addCertification, createGuardian, uploadDocument, type AddCertificationPayload } from '@/services/api';
+import { fetchServices, type ServiceItem } from '@/services/api/settings';
 
 const IBM = "'IBM Plex Sans', system-ui, sans-serif";
 
@@ -27,16 +28,6 @@ const CERT_TYPES: { value: AddCertificationPayload['certificationType']; label: 
   { value: 'RNP_SECURITY_LICENSE', label: 'RNP Security License' },
 ];
 
-const SPECIALIZATIONS = [
-  { value: 'PATROL', label: 'Patrol' },
-  { value: 'ESCORT', label: 'Escort' },
-  { value: 'EVENT_SECURITY', label: 'Event Security' },
-  { value: 'DOOR_SUPERVISION', label: 'Door Supervision' },
-  { value: 'VIP_PROTECTION', label: 'VIP Protection' },
-  { value: 'EMERGENCY_RESPONSE', label: 'Emergency Response' },
-  { value: 'COMPOUND_SECURITY', label: 'Compound Security' },
-  { value: 'STATIC_POST', label: 'Static Post' },
-] as const;
 
 interface CertRow {
   cert: AddCertificationPayload;
@@ -259,6 +250,16 @@ export function GuardianRegisterPage() {
   const [submitting,   setSubmitting]   = useState(false);
   const [submitError,  setSubmitError]  = useState<string | null>(null);
 
+  const [services,        setServices]        = useState<ServiceItem[]>([]);
+  const [servicesLoading, setServicesLoading] = useState(true);
+
+  useEffect(() => {
+    fetchServices()
+      .then(setServices)
+      .catch(() => setServices([]))
+      .finally(() => setServicesLoading(false));
+  }, []);
+
   function addCertRow() {
     setCertRows((prev) => [...prev, { ...EMPTY_CERT_ROW }]);
   }
@@ -445,28 +446,34 @@ export function GuardianRegisterPage() {
               </div>
               <div>
                 <FieldLabel>Specializations</FieldLabel>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
-                  {SPECIALIZATIONS.map(({ value, label }) => (
-                    <label
-                      key={value}
-                      className="flex items-center gap-2.5 px-3 py-2.5 rounded border border-slate-200 bg-slate-50 cursor-pointer hover:border-green-400 hover:bg-green-50/30 transition-colors"
-                    >
-                      <div className={cn(
-                        'w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-colors',
-                        specializations.includes(value) ? 'bg-green-500 border-green-500' : 'border-slate-300 bg-white',
-                      )}>
-                        {specializations.includes(value) && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />}
-                      </div>
-                      <input
-                        type="checkbox"
-                        className="sr-only"
-                        checked={specializations.includes(value)}
-                        onChange={() => toggleSpecialization(value)}
-                      />
-                      <span className="text-xs text-slate-700">{label}</span>
-                    </label>
-                  ))}
-                </div>
+                {servicesLoading ? (
+                  <p className="text-xs text-slate-400 mt-1">Loading services…</p>
+                ) : services.length === 0 ? (
+                  <p className="text-xs text-slate-400 mt-1">No services available.</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+                    {services.map((svc) => (
+                      <label
+                        key={svc.code}
+                        className="flex items-center gap-2.5 px-3 py-2.5 rounded border border-slate-200 bg-slate-50 cursor-pointer hover:border-green-400 hover:bg-green-50/30 transition-colors"
+                      >
+                        <div className={cn(
+                          'w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-colors',
+                          specializations.includes(svc.code) ? 'bg-green-500 border-green-500' : 'border-slate-300 bg-white',
+                        )}>
+                          {specializations.includes(svc.code) && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />}
+                        </div>
+                        <input
+                          type="checkbox"
+                          className="sr-only"
+                          checked={specializations.includes(svc.code)}
+                          onChange={() => toggleSpecialization(svc.code)}
+                        />
+                        <span className="text-xs text-slate-700">{svc.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
             </FormSection>
 

@@ -5,6 +5,7 @@ import {
   ChevronRight,
   Lock,
   MapPin,
+  Percent,
   Server,
   Shield,
   User,
@@ -17,7 +18,11 @@ import {
   fetchAdminProfile,
   updateAdminEmail,
   fetchDistricts,
+  fetchBookingSettings,
+  updateBookingSettings,
   type AdminProfile,
+  type BookingSettings,
+  type BookingSettingsPatch,
 } from '@/services/api/settings';
 import { changePassword } from '@/services/api/auth';
 import { fetchPricingRules, fetchBillingPolicies } from '@/services/api/pricing';
@@ -70,6 +75,83 @@ function ReadOnlyRow({ label, value }: { label: string; value: string }) {
       <span className="text-xs font-medium text-slate-800">{value}</span>
     </div>
   );
+}
+
+/** Numeric input with an optional trailing unit (e.g. "%"). */
+function NumField({
+  label,
+  value,
+  onChange,
+  suffix,
+  step = '0.1',
+  min = 0,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  suffix?: string;
+  step?: string;
+  min?: number;
+}) {
+  return (
+    <div>
+      <FieldLabel>{label}</FieldLabel>
+      <div className="relative">
+        <Input
+          type="number"
+          min={min}
+          step={step}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={cn('bg-slate-50 h-9', suffix && 'pr-7')}
+        />
+        {suffix && (
+          <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-medium text-slate-400">
+            {suffix}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Booking policy form ──────────────────────────────────────────────────────
+
+/** Percentage fields are edited as whole-number percents (15 = 15%). */
+type BookingForm = Record<keyof BookingSettingsPatch, string>;
+
+const PCT_KEYS: (keyof BookingSettingsPatch)[] = [
+  'nightSurchargeMinPct',
+  'nightSurchargeMaxPct',
+  'holidaySurchargeMinPct',
+  'holidaySurchargeMaxPct',
+  'guardianSharePct',
+  'platformSharePct',
+  'gatewaySharePct',
+  'reserveSharePct',
+  'vatRate',
+];
+
+/** Trim float noise from a percent conversion (0.15 × 100 → 15, not 15.000…2). */
+const toPct = (v: number) => Number((v * 100).toFixed(4));
+
+function settingsToForm(s: BookingSettings): BookingForm {
+  const form = {} as BookingForm;
+  form.minimumBookingHours = String(s.minimumBookingHours);
+  for (const key of PCT_KEYS) {
+    form[key] = String(toPct(s[key]));
+  }
+  return form;
+}
+
+function formToPatch(form: BookingForm): BookingSettingsPatch {
+  const patch: BookingSettingsPatch = {
+    minimumBookingHours: Number(form.minimumBookingHours),
+  };
+  for (const key of PCT_KEYS) {
+    patch[key] = Number((Number(form[key]) / 100).toFixed(6));
+  }
+  return patch;
 }
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
@@ -130,18 +212,29 @@ export function SettingsPage() {
   const [districts, setDistricts] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [bookingForm, setBookingForm] = useState<BookingForm | null>(null);
+  const [bookingUpdatedAt, setBookingUpdatedAt] = useState<string | null>(null);
+  const [bookingStatus, setBookingStatus] = useState<SaveStatus>('idle');
+  const [bookingError, setBookingError] = useState<string | null>(null);
+
   useEffect(() => {
     void Promise.all([
       fetchAdminProfile(),
       fetchPricingRules(),
       fetchBillingPolicies(),
       fetchDistricts(),
-    ]).then(([prof, rules, policies, dists]) => {
+      // Isolated so a missing permission here doesn't blank the whole page.
+      fetchBookingSettings().catch(() => null),
+    ]).then(([prof, rules, policies, dists, booking]) => {
       setProfile(prof);
       setEmail(prof.email ?? '');
       setPricingRules(rules);
       setBillingPolicies(policies);
       setDistricts(dists);
+      if (booking) {
+        setBookingForm(settingsToForm(booking));
+        setBookingUpdatedAt(booking.updatedAt);
+      }
     }).finally(() => setLoading(false));
   }, []);
 
@@ -181,6 +274,27 @@ export function SettingsPage() {
     }
   };
 
+  const setBookingField = (key: keyof BookingForm, value: string) => {
+    setBookingForm((prev) => (prev ? { ...prev, [key]: value } : prev));
+    setBookingStatus('idle');
+  };
+
+  const handleSaveBooking = async () => {
+    if (!bookingForm) return;
+    setBookingStatus('saving');
+    setBookingError(null);
+    try {
+      const updated = await updateBookingSettings(formToPatch(bookingForm));
+      setBookingForm(settingsToForm(updated));
+      setBookingUpdatedAt(updated.updatedAt);
+      setBookingStatus('saved');
+      setTimeout(() => setBookingStatus('idle'), 3000);
+    } catch (err) {
+      setBookingError(err instanceof Error ? err.message : 'Failed to save');
+      setBookingStatus('error');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col h-full bg-slate-50" style={{ fontFamily: IBM }}>
@@ -204,6 +318,138 @@ export function SettingsPage() {
   return (
     <div className="flex flex-col h-full overflow-y-auto bg-slate-50" style={{ fontFamily: IBM }}>
       <div className="p-4">
+
+        {/* Booking policy & revenue split */}
+        {bookingForm && (() => {
+          const splitTotal =
+            Number(bookingForm.guardianSharePct || 0) +
+            Number(bookingForm.platformSharePct || 0) +
+            Number(bookingForm.gatewaySharePct || 0) +
+            Number(bookingForm.reserveSharePct || 0);
+          const splitOk = Math.abs(splitTotal - 100) < 0.01;
+
+          return (
+            <FormSection
+              icon={<Percent className="w-4 h-4 text-violet-500" />}
+              iconBg="bg-violet-100"
+              title="Booking policy & revenue split"
+              badge={
+                bookingUpdatedAt ? (
+                  <span className="text-[10px] font-medium text-slate-400">
+                    Updated {new Date(bookingUpdatedAt).toLocaleDateString('en-GB', {
+                      day: 'numeric', month: 'short', year: 'numeric',
+                    })}
+                  </span>
+                ) : undefined
+              }
+            >
+              <p className="text-[11px] text-slate-400 mb-3">
+                These rules govern how each booking is priced and how its revenue is split.
+                Changing the split percentages affects how all future invoices are divided.
+              </p>
+
+              {/* Booking rules */}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+                <NumField
+                  label="Minimum hours"
+                  value={bookingForm.minimumBookingHours}
+                  onChange={(v) => setBookingField('minimumBookingHours', v)}
+                  step="0.5"
+                  min={1}
+                />
+                <NumField
+                  label="VAT rate"
+                  value={bookingForm.vatRate}
+                  onChange={(v) => setBookingField('vatRate', v)}
+                  suffix="%"
+                />
+                <div className="hidden md:block" />
+                <NumField
+                  label="Night surcharge min"
+                  value={bookingForm.nightSurchargeMinPct}
+                  onChange={(v) => setBookingField('nightSurchargeMinPct', v)}
+                  suffix="%"
+                />
+                <NumField
+                  label="Night surcharge max"
+                  value={bookingForm.nightSurchargeMaxPct}
+                  onChange={(v) => setBookingField('nightSurchargeMaxPct', v)}
+                  suffix="%"
+                />
+                <div className="hidden md:block" />
+                <NumField
+                  label="Holiday surcharge min"
+                  value={bookingForm.holidaySurchargeMinPct}
+                  onChange={(v) => setBookingField('holidaySurchargeMinPct', v)}
+                  suffix="%"
+                />
+                <NumField
+                  label="Holiday surcharge max"
+                  value={bookingForm.holidaySurchargeMaxPct}
+                  onChange={(v) => setBookingField('holidaySurchargeMaxPct', v)}
+                  suffix="%"
+                />
+              </div>
+
+              {/* Revenue split */}
+              <div className="border-t border-slate-100 pt-3">
+                <div className="flex items-center justify-between mb-2">
+                  <FieldLabel>Revenue split (per booking)</FieldLabel>
+                  <span
+                    className={cn(
+                      'text-[10px] font-semibold px-2 py-0.5 rounded-full',
+                      splitOk
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-amber-100 text-amber-700',
+                    )}
+                  >
+                    {splitOk ? 'Total 100%' : `Total ${splitTotal.toFixed(1)}% — must equal 100%`}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <NumField
+                    label="Guardian"
+                    value={bookingForm.guardianSharePct}
+                    onChange={(v) => setBookingField('guardianSharePct', v)}
+                    suffix="%"
+                  />
+                  <NumField
+                    label="Platform"
+                    value={bookingForm.platformSharePct}
+                    onChange={(v) => setBookingField('platformSharePct', v)}
+                    suffix="%"
+                  />
+                  <NumField
+                    label="Gateway"
+                    value={bookingForm.gatewaySharePct}
+                    onChange={(v) => setBookingField('gatewaySharePct', v)}
+                    suffix="%"
+                  />
+                  <NumField
+                    label="Reserve"
+                    value={bookingForm.reserveSharePct}
+                    onChange={(v) => setBookingField('reserveSharePct', v)}
+                    suffix="%"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between mt-4">
+                <StatusBanner status={bookingStatus} error={bookingError} />
+                <button
+                  type="button"
+                  onClick={() => void handleSaveBooking()}
+                  disabled={bookingStatus === 'saving' || !splitOk}
+                  className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#14B87A] hover:bg-[#12a06b] disabled:opacity-50 rounded-lg transition-colors cursor-pointer"
+                  title={!splitOk ? 'Revenue split must total 100%' : undefined}
+                >
+                  <Check className="w-3.5 h-3.5" /> Save policy
+                </button>
+              </div>
+            </FormSection>
+          );
+        })()}
+
         <div className="grid grid-cols-2 gap-4">
 
           {/* ── Left column ── */}

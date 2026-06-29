@@ -14,6 +14,7 @@ import { fetchFullGuardianRoster } from '@/services/api/guardians';
 import { fetchInvoices } from '@/services/api/billing';
 import { apiGet } from '@/lib/api-client';
 import { fetchJobFactsDaily, fetchGuardianPerfDaily } from '@/services/api/analytics';
+import { fetchBookingSettings, type BookingSettings } from '@/services/api/settings';
 import type { RawJobFactsDaily } from '@/services/api/analytics';
 import type { ActivityItem, DashboardStats } from '@/types/job';
 import type { GuardianListItem } from '@/types/guardian-roster';
@@ -119,9 +120,13 @@ function computePeriodRange(period: ViewPeriod, cFrom: string, cTo: string): Per
 }
 
 const JOB_LABELS: Record<string, string> = {
-  PATROL: 'Patrol', ESCORT: 'Escort', EVENT_SECURITY: 'Event Security',
-  DOOR_SUPERVISION: 'Door Supervision', VIP_PROTECTION: 'VIP Protection',
-  EMERGENCY_RESPONSE: 'Emergency Response', COMPOUND_SECURITY: 'Compound Security', STATIC_POST: 'Static Post',
+  STANDARD_GUARDIAN: 'Standard Guardian',
+  CORPORATE_GUARDIAN: 'Corporate Guardian',
+  EVENT_GUARDIAN: 'Event Guardian',
+  CHILD_ESCORT_GUARDIAN: 'Child Escort Guardian',
+  MEDICAL_ESCORT_GUARDIAN: 'Medical Escort Guardian',
+  EXECUTIVE_VIP_GUARDIAN: 'Executive / VIP Guardian',
+  ARMED_GUARDIAN: 'Armed Guardian',
 };
 
 const TT = chartTooltip;
@@ -228,6 +233,7 @@ export function DashboardPage() {
   const [invoicesDraft, setInvDraft]     = useState<RawInvoice[]>([]);
   const [activity, setActivity]         = useState<ActivityItem[]>([]);
   const [liveJobs, setLiveJobs]         = useState<{ inProgress: number; dispatching: number; pending: number } | null>(null);
+  const [bookingSettings, setBookingSettings] = useState<BookingSettings | null>(null);
   const [pendingReplace, setPendingReplace] = useState(0);
   const [loading, setLoading]           = useState(true);
   const [fetchedAt, setFetchedAt]       = useState(0);
@@ -247,7 +253,8 @@ export function DashboardPage() {
       fetchActivity().catch(() => [] as ActivityItem[]),
       fetchLiveJobCounts().catch(() => ({ inProgress: 0, dispatching: 0, pending: 0 })),
       fetchReplacementRequests().catch(() => []),
-    ]).then(([s, jf, gp, ros, iss, ovd, dis, paid, draft, act, lj, repl]) => {
+      fetchBookingSettings().catch(() => null),
+    ]).then(([s, jf, gp, ros, iss, ovd, dis, paid, draft, act, lj, repl, booking]) => {
       if (s) setStats(s);
       setJobFacts(Array.isArray(jf) ? jf : []);
       setGPerf(Array.isArray(gp) ? gp : []);
@@ -260,6 +267,7 @@ export function DashboardPage() {
       setActivity(act);
       setLiveJobs(lj);
       setPendingReplace(repl.length);
+      setBookingSettings(booking);
       setFetchedAt(Date.now());
     }).finally(() => setLoading(false));
   }, []);
@@ -280,9 +288,21 @@ export function DashboardPage() {
   const facts30   = useMemo(() => filterFacts(jobFacts, daysAgo(30), today),            [jobFacts, today]);
 
   // ── Aggregates ────────────────────────────────────────────────────────────
-  const revenue     = sumRev(facts);
-  const prevRevenue = sumRev(prevFacts);
-  const revToday    = sumRev(filterFacts(jobFacts, today, today));
+  // `totalRevenue` from JobFactsDaily is the *gross* client invoice total
+  // (Σ invoice.total, VAT-inclusive). The revenue split is computed on the
+  // pre-VAT subtotal, so to surface real platform earnings we strip VAT first
+  // and apply the current split percentages from booking settings.
+  const grossBilling     = sumRev(facts);
+  const prevGrossBilling = sumRev(prevFacts);
+  const grossToday       = sumRev(filterFacts(jobFacts, today, today));
+
+  const vatRate      = bookingSettings?.vatRate ?? 0.18;
+  const platformPct  = bookingSettings?.platformSharePct ?? 0.15;
+  const guardianPct  = bookingSettings?.guardianSharePct ?? 0.80;
+  const netFactor    = 1 / (1 + vatRate);          // gross (incl. VAT) → subtotal
+  const platformRevenue     = grossBilling * netFactor * platformPct;
+  const prevPlatformRevenue = prevGrossBilling * netFactor * platformPct;
+  const guardianPayout      = grossBilling * netFactor * guardianPct;
   const jobs        = sumJobs(facts);
   const prevJobs    = sumJobs(prevFacts);
   const completed   = sumCompleted(facts);
@@ -537,7 +557,7 @@ export function DashboardPage() {
           <KpiPill label="On Shift"             value={loading ? '—' : `${guardianAvail.onDuty + guardianAvail.available} / ${guardianAvail.total}`} loading={loading} />
           <KpiPill label="No-show Rate"         value={loading || !kpis ? '—' : `${(kpis.noShowRate * 100).toFixed(1)}%`}                loading={loading} />
           <KpiPill label="Replacements Pending" value={loading ? '—' : String(pendingReplace)}                                           loading={loading} />
-          <KpiPill label="Revenue Today"        value={loading ? '—' : formatRWF(revToday)}                                              loading={loading} />
+          <KpiPill label="Billed Today"         value={loading ? '—' : formatRWF(grossToday)}                                            loading={loading} />
           <KpiPill label="Overdue Invoices"     value={loading ? '—' : String(invoicesOverdue.length)}                                   loading={loading} />
         </div>
 
@@ -615,11 +635,28 @@ export function DashboardPage() {
         <Section icon={Banknote} iconBg="bg-emerald-50 border-emerald-100" iconColor="text-[#14B87A]"
           title="Financial Overview" subtitle={`Revenue & billing · ${period.label}`}
           action="View Billing" onAction={() => navigate('/billing')}>
-          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-            <StatCard label={`Revenue · ${period.label}`} value={formatRWF(revenue)} loading={loading}
-              icon={Banknote} iconBg="bg-emerald-50 border-emerald-100" iconColor="text-[#14B87A]"
-              sub={prevRevenue > 0 ? deltaLabel(revenue, prevRevenue, 'rwf').text : undefined}
-              trend={prevRevenue > 0 ? deltaLabel(revenue, prevRevenue, 'rwf').trend : undefined} />
+
+          {/* Revenue band — platform revenue is what the company actually earns,
+              derived by stripping VAT from gross billing and applying the split. */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+            <StatCard label={`Platform Revenue · ${period.label}`} value={formatRWF(platformRevenue)} loading={loading}
+              icon={TrendingUp} iconBg="bg-emerald-50 border-emerald-100" iconColor="text-[#14B87A]"
+              sub={prevPlatformRevenue > 0
+                ? deltaLabel(platformRevenue, prevPlatformRevenue, 'rwf').text
+                : `${Math.round(platformPct * 100)}% of net billings`}
+              trend={prevPlatformRevenue > 0 ? deltaLabel(platformRevenue, prevPlatformRevenue, 'rwf').trend : 'up'} />
+            <StatCard label={`Gross Billing · ${period.label}`} value={formatRWF(grossBilling)} loading={loading}
+              icon={Banknote} iconBg="bg-slate-50 border-slate-200" iconColor="text-slate-500"
+              sub={prevGrossBilling > 0
+                ? deltaLabel(grossBilling, prevGrossBilling, 'rwf').text
+                : 'Client invoices · incl. VAT'}
+              trend={prevGrossBilling > 0 ? deltaLabel(grossBilling, prevGrossBilling, 'rwf').trend : 'neutral'} />
+            <StatCard label="Guardian Payouts" value={formatRWF(guardianPayout)} loading={loading}
+              icon={Shield} iconBg="bg-blue-50 border-blue-100" iconColor="text-blue-500"
+              sub={`${Math.round(guardianPct * 100)}% of net billings · liability`} />
+          </div>
+
+          <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
             <StatCard label="Outstanding" value={formatRWF(outstanding)} loading={loading}
               icon={AlertTriangle} iconBg="bg-amber-50 border-amber-100" iconColor="text-amber-500"
               sub={`${invoicesIssued.length + invoicesOverdue.length} invoices pending`}
@@ -657,16 +694,16 @@ export function DashboardPage() {
 
         {/* ── Revenue Intelligence charts ── */}
         <Section icon={TrendingUp} iconBg="bg-emerald-50 border-emerald-100" iconColor="text-[#14B87A]"
-          title="Revenue Intelligence" subtitle="Revenue trends and patterns — last 30 days">
+          title="Revenue Intelligence" subtitle="Gross billing trends and patterns — last 30 days">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <ChartCard title="Daily Revenue" subtitle="RWF thousands with 7-day rolling average">
+            <ChartCard title="Daily Gross Billing" subtitle="RWF thousands with 7-day rolling average">
               {facts30.length > 0 ? <ReactECharts option={dailyRevOption} style={{ height: 180 }} /> : <div className="h-[180px] flex items-center justify-center text-xs text-slate-400">No data</div>}
             </ChartCard>
-            <ChartCard title="Monthly Revenue" subtitle="Last 12 months in RWF millions">
+            <ChartCard title="Monthly Gross Billing" subtitle="Last 12 months in RWF millions">
               <ReactECharts option={monthlyRevOption} style={{ height: 180 }} />
             </ChartCard>
             <div className="lg:col-span-2">
-              <ChartCard title="Revenue by Hour of Day" subtitle="When billing is generated — green = working hours, grey = overnight (22:00–06:00)">
+              <ChartCard title="Gross Billing by Hour of Day" subtitle="When billing is generated — green = working hours, grey = overnight (22:00–06:00)">
                 <ReactECharts option={revByHourOption} style={{ height: 160 }} />
               </ChartCard>
             </div>
