@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cn, formatDelta, formatRWF } from '@/lib/utils';
+import { cn, formatDelta, formatMinutes, formatRatePct, formatRWF } from '@/lib/utils';
 
 // ─── formatRWF ────────────────────────────────────────────────────────────────
 
@@ -71,5 +71,47 @@ describe('cn', () => {
 
   it('handles conditional objects', () => {
     expect(cn({ 'font-bold': true, italic: false })).toBe('font-bold');
+  });
+});
+
+// ─── formatMinutes ────────────────────────────────────────────────────────────
+
+describe('formatMinutes', () => {
+  it('formats a numeric latency with one decimal', () => {
+    expect(formatMinutes(0)).toBe('0.0 min');
+    expect(formatMinutes(12.34)).toBe('12.3 min');
+    expect(formatMinutes(90)).toBe('90.0 min');
+  });
+
+  // The backend returns null for percentiles it cannot compute (no offers in
+  // the window). Rendering those must not throw — see DashboardPage KPIs.
+  it('renders an em dash for null / undefined instead of throwing', () => {
+    expect(formatMinutes(null)).toBe('—');
+    expect(formatMinutes(undefined)).toBe('—');
+  });
+
+  it('renders an em dash for non-finite values', () => {
+    expect(formatMinutes(NaN)).toBe('—');
+    expect(formatMinutes(Infinity)).toBe('—');
+  });
+});
+
+// ─── formatRatePct ────────────────────────────────────────────────────────────
+
+describe('formatRatePct', () => {
+  it('converts a 0–1 rate to a percentage with one decimal', () => {
+    expect(formatRatePct(0)).toBe('0.0%');
+    expect(formatRatePct(0.7143)).toBe('71.4%');
+    expect(formatRatePct(1)).toBe('100.0%');
+  });
+
+  // null must NOT coerce to 0.0% — that reads as a real measurement of zero.
+  it('renders an em dash for null / undefined rather than 0.0%', () => {
+    expect(formatRatePct(null)).toBe('—');
+    expect(formatRatePct(undefined)).toBe('—');
+  });
+
+  it('renders an em dash for non-finite values', () => {
+    expect(formatRatePct(NaN)).toBe('—');
   });
 });

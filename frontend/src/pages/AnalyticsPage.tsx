@@ -10,7 +10,8 @@ import { apiGet } from '@/lib/api-client';
 import { fetchJobFactsDaily, fetchGuardianPerfDaily } from '@/services/api/analytics';
 import type { RawJobFactsDaily } from '@/services/api/analytics';
 import type { DashboardStats } from '@/types/job';
-import { cn, formatRWF } from '@/lib/utils';
+import type { KpisData } from '@/types/analytics';
+import { cn, formatMinutes, formatRatePct, formatRWF, NO_VALUE } from '@/lib/utils';
 import {
   STATUS, CATEGORICAL, BAR_RADIUS_V, BAR_RADIUS_H, chartTooltip, valueAxisGrid,
 } from '@/lib/chart-theme';
@@ -18,28 +19,6 @@ import {
 const IBM = "'IBM Plex Sans', system-ui, sans-serif";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-interface KpisData {
-  jobsCreated: number;
-  jobsWithAcceptedOffer: number;
-  totalOffers: number;
-  acceptedOffers: number;
-  expiredOffers: number;
-  noShowAssignments: number;
-  jobsFailed: number;
-  dispatchFailuresByReason: { reason: string; count: number }[];
-  dispatchConversionRate: number;
-  offerAcceptanceRate: number;
-  offerExpiryRate: number;
-  noShowRate: number;
-  dispatchFailureRate: number;
-  latencyMinutes: {
-    p50TimeToFirstOffer: number; p95TimeToFirstOffer: number;
-    p50TimeToAccept: number; p95TimeToAccept: number;
-    p50TimeToOnSite: number; p95TimeToOnSite: number;
-    p50TimeToComplete: number; p95TimeToComplete: number;
-  };
-}
 
 interface FullDashStats extends DashboardStats { kpis?: KpisData }
 
@@ -183,6 +162,16 @@ function summarizePeriod(
     activeGuardians: new Set(g.filter(r => r.jobsAssigned > 0).map(r => r.guardianId)).size,
     noShows:         g.reduce((s, r) => s + r.noShowCount, 0),
   };
+}
+
+// A null rate is unmeasurable, not "bad" — return null so callers can stay neutral.
+function rateAtLeast(rate: number | null | undefined, target: number): boolean | null {
+  if (rate == null || !Number.isFinite(rate)) return null;
+  return rate >= target;
+}
+function rateUnder(rate: number | null | undefined, target: number): boolean | null {
+  if (rate == null || !Number.isFinite(rate)) return null;
+  return rate < target;
 }
 
 const CMP_ROWS: { key: keyof PeriodSummary; label: string; fmt: (v: number) => string; lowerIsBetter?: boolean }[] = [
@@ -752,33 +741,46 @@ export function AnalyticsPage() {
                   </div>
                 </div>
                 {(() => {
+                  const lat = kpis.latencyMinutes;
                   const stages = [
-                    { label: 'Time to First Offer', p50: kpis.latencyMinutes.p50TimeToFirstOffer, p95: kpis.latencyMinutes.p95TimeToFirstOffer },
-                    { label: 'Time to Accept',       p50: kpis.latencyMinutes.p50TimeToAccept,     p95: kpis.latencyMinutes.p95TimeToAccept },
-                    { label: 'Time to On-site',      p50: kpis.latencyMinutes.p50TimeToOnSite,     p95: kpis.latencyMinutes.p95TimeToOnSite },
-                    { label: 'Time to Complete',     p50: kpis.latencyMinutes.p50TimeToComplete,   p95: kpis.latencyMinutes.p95TimeToComplete },
+                    { label: 'Time to First Offer', p50: lat?.p50TimeToFirstOffer ?? null, p95: lat?.p95TimeToFirstOffer ?? null },
+                    { label: 'Time to Accept',      p50: lat?.p50TimeToAccept ?? null,     p95: lat?.p95TimeToAccept ?? null },
+                    { label: 'Time to On-site',     p50: lat?.p50TimeToOnSite ?? null,     p95: lat?.p95TimeToOnSite ?? null },
+                    { label: 'Time to Complete',    p50: lat?.p50TimeToComplete ?? null,   p95: lat?.p95TimeToComplete ?? null },
                   ];
-                  const scale = Math.max(...stages.map(s => s.p95), 1);
+                  // Percentiles are null when there is nothing to measure. Scale off
+                  // measured values only, and omit unmeasured markers from the track.
+                  const measured = stages.flatMap(s => [s.p50, s.p95]).filter((v): v is number => v != null && Number.isFinite(v));
+                  const scale = Math.max(...measured, 1);
+                  const pos = (v: number | null) => (v != null && Number.isFinite(v) ? (v / scale) * 100 : null);
                   return (
                     <div className="space-y-5">
                       {stages.map(({ label, p50, p95 }) => {
-                        const l50 = (p50 / scale) * 100;
-                        const l95 = (p95 / scale) * 100;
-                        const lo = Math.min(l50, l95), hi = Math.max(l50, l95);
+                        const l50 = pos(p50);
+                        const l95 = pos(p95);
+                        const both = l50 != null && l95 != null;
+                        const lo = both ? Math.min(l50, l95) : 0;
+                        const hi = both ? Math.max(l50, l95) : 0;
                         return (
                           <div key={label}>
                             <div className="flex items-center justify-between mb-2">
                               <p className="text-xs text-slate-500">{label}</p>
                               <div className="flex gap-3">
-                                <span className="text-[11px] font-mono tabular-nums"><span className="text-slate-400">P50 </span><span className="font-semibold text-[#14B87A]">{p50.toFixed(1)}m</span></span>
-                                <span className="text-[11px] font-mono tabular-nums"><span className="text-slate-400">P95 </span><span className="font-semibold text-amber-600">{p95.toFixed(1)}m</span></span>
+                                <span className="text-[11px] font-mono tabular-nums"><span className="text-slate-400">P50 </span><span className={cn('font-semibold', p50 != null ? 'text-[#14B87A]' : 'text-slate-300')}>{p50 != null ? `${p50.toFixed(1)}m` : NO_VALUE}</span></span>
+                                <span className="text-[11px] font-mono tabular-nums"><span className="text-slate-400">P95 </span><span className={cn('font-semibold', p95 != null ? 'text-amber-600' : 'text-slate-300')}>{p95 != null ? `${p95.toFixed(1)}m` : NO_VALUE}</span></span>
                               </div>
                             </div>
                             <div className="relative h-3">
                               <div className="absolute top-1/2 left-0 right-0 h-px bg-slate-100" />
-                              <div className="absolute top-1/2 h-0.5 -translate-y-1/2 bg-slate-300 rounded-full" style={{ left: `${lo}%`, width: `${hi - lo}%` }} />
-                              <div className="absolute top-1/2 w-2.5 h-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#14B87A] ring-2 ring-white" style={{ left: `${l50}%` }} title={`P50 ${p50.toFixed(1)}m`} />
-                              <div className="absolute top-1/2 w-2.5 h-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-500 ring-2 ring-white" style={{ left: `${l95}%` }} title={`P95 ${p95.toFixed(1)}m`} />
+                              {both && (
+                                <div className="absolute top-1/2 h-0.5 -translate-y-1/2 bg-slate-300 rounded-full" style={{ left: `${lo}%`, width: `${hi - lo}%` }} />
+                              )}
+                              {l50 != null && (
+                                <div className="absolute top-1/2 w-2.5 h-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#14B87A] ring-2 ring-white" style={{ left: `${l50}%` }} title={`P50 ${formatMinutes(p50)}`} />
+                              )}
+                              {l95 != null && (
+                                <div className="absolute top-1/2 w-2.5 h-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-500 ring-2 ring-white" style={{ left: `${l95}%` }} title={`P95 ${formatMinutes(p95)}`} />
+                              )}
                             </div>
                           </div>
                         );
@@ -790,14 +792,15 @@ export function AnalyticsPage() {
                 {/* Rate pills */}
                 <div className="grid grid-cols-2 gap-2 mt-5">
                   {[
-                    { label: 'Conversion Rate',  value: `${(kpis.dispatchConversionRate * 100).toFixed(1)}%`, good: kpis.dispatchConversionRate >= 0.7 },
-                    { label: 'Acceptance Rate',  value: `${(kpis.offerAcceptanceRate * 100).toFixed(1)}%`,   good: kpis.offerAcceptanceRate >= 0.6 },
-                    { label: 'Expiry Rate',      value: `${(kpis.offerExpiryRate * 100).toFixed(1)}%`,       good: kpis.offerExpiryRate < 0.2 },
-                    { label: 'No-show Rate',     value: `${(kpis.noShowRate * 100).toFixed(1)}%`,            good: kpis.noShowRate < 0.05 },
-                  ].map(({ label, value, good }) => (
-                    <div key={label} className={cn('rounded-lg px-3 py-2.5 border', good ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100')}>
+                    { label: 'Conversion Rate',  rate: kpis.dispatchConversionRate, good: rateAtLeast(kpis.dispatchConversionRate, 0.7) },
+                    { label: 'Acceptance Rate',  rate: kpis.offerAcceptanceRate,    good: rateAtLeast(kpis.offerAcceptanceRate, 0.6) },
+                    { label: 'Expiry Rate',      rate: kpis.offerExpiryRate,        good: rateUnder(kpis.offerExpiryRate, 0.2) },
+                    { label: 'No-show Rate',     rate: kpis.noShowRate,             good: rateUnder(kpis.noShowRate, 0.05) },
+                  ].map(({ label, rate, good }) => (
+                    // good === null means "not measurable" — stay neutral rather than flagging red.
+                    <div key={label} className={cn('rounded-lg px-3 py-2.5 border', good === null ? 'bg-slate-50 border-slate-200' : good ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100')}>
                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{label}</p>
-                      <p className={cn('font-mono text-base font-bold mt-0.5', good ? 'text-emerald-700' : 'text-red-600')}>{value}</p>
+                      <p className={cn('font-mono text-base font-bold mt-0.5', good === null ? 'text-slate-400' : good ? 'text-emerald-700' : 'text-red-600')}>{formatRatePct(rate)}</p>
                     </div>
                   ))}
                 </div>

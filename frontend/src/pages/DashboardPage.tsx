@@ -16,10 +16,11 @@ import { apiGet } from '@/lib/api-client';
 import { fetchJobFactsDaily, fetchGuardianPerfDaily } from '@/services/api/analytics';
 import { fetchBookingSettings, type BookingSettings } from '@/services/api/settings';
 import type { RawJobFactsDaily } from '@/services/api/analytics';
+import type { KpisData } from '@/types/analytics';
 import type { ActivityItem, DashboardStats } from '@/types/job';
 import type { GuardianListItem } from '@/types/guardian-roster';
 import type { RawInvoice } from '@/types/billing';
-import { cn, formatRWF } from '@/lib/utils';
+import { cn, formatMinutes, formatRatePct, formatRWF } from '@/lib/utils';
 import {
   STATUS, HEAT_RAMP, AGING_COLORS,
   BAR_RADIUS_V, BAR_RADIUS_H, chartTooltip, valueAxisGrid,
@@ -30,21 +31,6 @@ const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface KpisData {
-  jobsCreated: number; jobsWithAcceptedOffer: number;
-  totalOffers: number; acceptedOffers: number; expiredOffers: number;
-  noShowAssignments: number; noShowManual: number; noShowSystem: number;
-  jobsFailed: number;
-  dispatchFailuresByReason: { reason: string; count: number }[];
-  dispatchConversionRate: number; offerAcceptanceRate: number;
-  offerExpiryRate: number; noShowRate: number; dispatchFailureRate: number;
-  latencyMinutes: {
-    p50TimeToFirstOffer: number; p95TimeToFirstOffer: number;
-    p50TimeToAccept: number; p95TimeToAccept: number;
-    p50TimeToOnSite: number; p95TimeToOnSite: number;
-    p50TimeToComplete: number; p95TimeToComplete: number;
-  };
-}
 interface FullDashStats extends DashboardStats { kpis?: KpisData }
 interface RawGuardianPerfDaily {
   date: string; guardianId: string;
@@ -70,6 +56,16 @@ function filterFacts(facts: RawJobFactsDaily[], from: string, to: string) {
 function sumRev(f: RawJobFactsDaily[]) { return f.reduce((s, r) => s + Number(r.totalRevenue ?? 0), 0); }
 function sumJobs(f: RawJobFactsDaily[]) { return f.reduce((s, r) => s + r.jobCount, 0); }
 function sumCompleted(f: RawJobFactsDaily[]) { return f.reduce((s, r) => s + r.completedCount, 0); }
+// A null rate has no direction — show no arrow rather than a misleading "down".
+function trendAbove(rate: number | null | undefined, target: number): 'up' | 'down' | undefined {
+  if (rate == null || !Number.isFinite(rate)) return undefined;
+  return rate >= target ? 'up' : 'down';
+}
+function trendBelow(rate: number | null | undefined, target: number): 'up' | 'down' | undefined {
+  if (rate == null || !Number.isFinite(rate)) return undefined;
+  return rate < target ? 'up' : 'down';
+}
+
 function rollingAvg(data: number[], win: number): number[] {
   return data.map((_, i) => {
     const s = data.slice(Math.max(0, i - win + 1), i + 1);
@@ -555,7 +551,7 @@ export function DashboardPage() {
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
           <KpiPill label="Active Jobs"          value={loading ? '—' : String(liveJobTotal)}                                              loading={loading} />
           <KpiPill label="On Shift"             value={loading ? '—' : `${guardianAvail.onDuty + guardianAvail.available} / ${guardianAvail.total}`} loading={loading} />
-          <KpiPill label="No-show Rate"         value={loading || !kpis ? '—' : `${(kpis.noShowRate * 100).toFixed(1)}%`}                loading={loading} />
+          <KpiPill label="No-show Rate"         value={loading || !kpis ? '—' : formatRatePct(kpis.noShowRate)}                        loading={loading} />
           <KpiPill label="Replacements Pending" value={loading ? '—' : String(pendingReplace)}                                           loading={loading} />
           <KpiPill label="Billed Today"         value={loading ? '—' : formatRWF(grossToday)}                                            loading={loading} />
           <KpiPill label="Overdue Invoices"     value={loading ? '—' : String(invoicesOverdue.length)}                                   loading={loading} />
@@ -676,18 +672,18 @@ export function DashboardPage() {
           <Section icon={Zap} iconBg="bg-purple-50 border-purple-100" iconColor="text-purple-500"
             title="Dispatch Performance" subtitle="Conversion and latency KPIs">
             <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-              <StatCard label="Dispatch Conversion" value={`${(kpis.dispatchConversionRate * 100).toFixed(1)}%`}
+              <StatCard label="Dispatch Conversion" value={formatRatePct(kpis.dispatchConversionRate)}
                 icon={Zap} iconBg="bg-purple-50 border-purple-100" iconColor="text-purple-500"
-                sub="Jobs → guardian accepted" trend={kpis.dispatchConversionRate >= 0.7 ? 'up' : 'down'} />
-              <StatCard label="Offer Acceptance" value={`${(kpis.offerAcceptanceRate * 100).toFixed(1)}%`}
+                sub="Jobs → guardian accepted" trend={trendAbove(kpis.dispatchConversionRate, 0.7)} />
+              <StatCard label="Offer Acceptance" value={formatRatePct(kpis.offerAcceptanceRate)}
                 icon={CheckCircle} iconBg="bg-emerald-50 border-emerald-100" iconColor="text-[#14B87A]"
-                sub="Offers accepted by guardians" trend={kpis.offerAcceptanceRate >= 0.6 ? 'up' : 'down'} />
-              <StatCard label="Time to First Offer P50" value={`${kpis.latencyMinutes.p50TimeToFirstOffer.toFixed(1)} min`}
+                sub="Offers accepted by guardians" trend={trendAbove(kpis.offerAcceptanceRate, 0.6)} />
+              <StatCard label="Time to First Offer P50" value={formatMinutes(kpis.latencyMinutes?.p50TimeToFirstOffer)}
                 icon={Timer} iconBg="bg-blue-50 border-blue-100" iconColor="text-blue-500"
-                sub={`P95: ${kpis.latencyMinutes.p95TimeToFirstOffer.toFixed(1)} min`} />
-              <StatCard label="No-show Rate" value={`${(kpis.noShowRate * 100).toFixed(1)}%`}
+                sub={`P95: ${formatMinutes(kpis.latencyMinutes?.p95TimeToFirstOffer)}`} />
+              <StatCard label="No-show Rate" value={formatRatePct(kpis.noShowRate)}
                 icon={AlertTriangle} iconBg="bg-red-50 border-red-100" iconColor="text-red-500"
-                sub={`${kpis.noShowAssignments} no-shows`} trend={kpis.noShowRate < 0.05 ? 'up' : 'down'} />
+                sub={`${kpis.noShowAssignments} no-shows`} trend={trendBelow(kpis.noShowRate, 0.05)} />
             </div>
           </Section>
         )}

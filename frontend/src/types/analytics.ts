@@ -54,3 +54,37 @@ export interface ExportReportItem {
   iconBg: string;
   iconColor: string;
 }
+
+/**
+ * Dispatch KPIs from `GET /admin/analytics/dashboard` (the `kpis` field).
+ *
+ * Rates and latency percentiles are NULLABLE: the backend returns null for any
+ * metric it has nothing to compute over (no jobs, no offers, no arrivals in the
+ * window). Counts are always present. Do not narrow these to `number` — render
+ * them through `formatMinutes` / `formatRatePct` in `@/lib/utils`.
+ */
+export interface DispatchLatencyMinutes {
+  p50TimeToFirstOffer: number | null; p95TimeToFirstOffer: number | null;
+  p50TimeToAccept: number | null;     p95TimeToAccept: number | null;
+  p50TimeToOnSite: number | null;     p95TimeToOnSite: number | null;
+  p50TimeToComplete: number | null;   p95TimeToComplete: number | null;
+}
+
+export interface KpisData {
+  jobsCreated: number;
+  jobsWithAcceptedOffer: number;
+  totalOffers: number;
+  acceptedOffers: number;
+  expiredOffers: number;
+  noShowAssignments: number;
+  noShowManual?: number;
+  noShowSystem?: number;
+  jobsFailed: number;
+  dispatchFailuresByReason: { reason: string; count: number }[];
+  dispatchConversionRate: number | null;
+  offerAcceptanceRate: number | null;
+  offerExpiryRate: number | null;
+  noShowRate: number | null;
+  dispatchFailureRate: number | null;
+  latencyMinutes: DispatchLatencyMinutes | null;
+}
